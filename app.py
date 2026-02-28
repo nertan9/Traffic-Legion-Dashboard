@@ -1,14 +1,124 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import plotly.graph_objects as go
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# ===============================
-# БАЗА ДАННЫХ
-# ===============================
+# =====================================================
+# CONFIG
+# =====================================================
+st.set_page_config(page_title="Team Dashboard", layout="wide", page_icon="📊")
 
+# =====================================================
+# THEME CSS (SaaS Dark)
+# =====================================================
+st.markdown(
+    """
+<style>
+:root{
+  --bg:#0B1220;
+  --panel:#0F172A;
+  --panel2:#0B1324;
+  --border:rgba(255,255,255,.08);
+  --text:#E5E7EB;
+  --muted:#94A3B8;
+  --accent:#7C3AED;
+  --good:#22C55E;
+  --bad:#64748B;
+  --warn:#F59E0B;
+}
+
+.block-container { padding-top: 28px; }
+h1,h2,h3 { letter-spacing: -0.02em; }
+
+.card{
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+.cardHeader{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px;
+  margin-bottom: 10px;
+}
+.title{
+  font-size: 34px; font-weight: 800; margin:0;
+}
+.subtitle{
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.kpiRow{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.kpi{
+  background: rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding: 14px;
+}
+.kpiLabel{ color: var(--muted); font-size: 12px; }
+.kpiValue{ font-size: 20px; font-weight: 800; margin-top: 6px; }
+
+.badge{
+  display:inline-flex; align-items:center; gap:8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  border:1px solid;
+  font-size: 12px;
+}
+.badgeOpen{ color: #86EFAC; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.08); }
+.badgePaid{ color: #CBD5E1; border-color: rgba(148,163,184,.35); background: rgba(148,163,184,.10); }
+
+.hr{ height:1px; background: var(--border); margin: 14px 0; }
+
+.tableRow{
+  display:grid;
+  grid-template-columns: 0.7fr 1.4fr 1fr 1fr 1.6fr 1.2fr 0.9fr;
+  gap: 12px;
+  align-items:center;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tableHead{
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding-top: 6px;
+  padding-bottom: 10px;
+}
+.money{ color: #86EFAC; font-weight: 800; }
+
+.small{ color: var(--muted); font-size: 12px; }
+
+button[kind="secondary"]{
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.03);
+}
+
+button[kind="secondary"]:hover{
+  border-color:rgba(124,58,237,.55);
+  background:rgba(124,58,237,.10);
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# =====================================================
+# DATABASE
+# =====================================================
 conn = sqlite3.connect("database.db", check_same_thread=False)
 c = conn.cursor()
 
@@ -16,7 +126,8 @@ c.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE,
-    password TEXT,
+    password BLOB,
+    full_name TEXT,
     role TEXT
 )
 """)
@@ -25,50 +136,75 @@ c.execute("""
 CREATE TABLE IF NOT EXISTS salaries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
-    period TEXT,
+    year INTEGER,
+    week INTEGER,
     income REAL,
     brocards REAL,
     rent REAL,
     supplies REAL,
-    kpi_enabled INTEGER
+    bonus REAL DEFAULT 0,
+    percent REAL DEFAULT 30,
+    usd_rate REAL DEFAULT 77,
+    status TEXT DEFAULT 'Открыт',
+    created_at TEXT
 )
 """)
+
 conn.commit()
 
-# ===============================
-# СОЗДАНИЕ ADMIN (если нет)
-# ===============================
-
+# =====================================================
+# CREATE ADMIN
+# =====================================================
 def create_admin():
-    c.execute("SELECT * FROM users WHERE username = ?", ("admin",))
+    c.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
     if not c.fetchone():
         hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt())
-        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                  ("admin", hashed, "admin"))
+        c.execute(
+            "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+            ("admin", hashed, "Администратор", "admin"),
+        )
         conn.commit()
 
 create_admin()
 
-# ===============================
-# АВТОРИЗАЦИЯ
-# ===============================
+# =====================================================
+# HELPERS
+# =====================================================
+def get_week_range(year: int, week: int):
+    first_day = datetime.strptime(f"{year}-W{week}-1", "%G-W%V-%u")
+    last_day = first_day + timedelta(days=6)
+    return first_day.strftime("%Y-%m-%d"), last_day.strftime("%Y-%m-%d")
 
+def money(x):
+    return f"{round(float(x), 2):,.2f}".replace(",", " ")
+
+def calc_total(income, brocards, rent, supplies, bonus):
+    profit = float(income) - (float(brocards) + float(rent) + float(supplies))
+    salary = profit * 0.30
+    total = salary + float(bonus)
+    return profit, salary, total
+
+# =====================================================
+# AUTH
+# =====================================================
 def login():
-    st.title("🔐 Вход")
-
-    username = st.text_input("Логин")
-    password = st.text_input("Пароль", type="password")
-
-    if st.button("Войти"):
-        c.execute("SELECT * FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
-
-        if user and bcrypt.checkpw(password.encode(), user[2]):
-            st.session_state["user"] = user
-            st.success("Успешный вход")
-            st.rerun()
-        else:
-            st.error("Неверные данные")
+    st.markdown("<div class='card'><h1 class='title'>🔐 Вход</h1><div class='subtitle'>Team Dashboard</div></div>", unsafe_allow_html=True)
+    st.write("")
+    colA, colB, colC = st.columns([1.1, 1.1, 1.4])
+    with colA:
+        username = st.text_input("Логин", key="login_user")
+    with colB:
+        password = st.text_input("Пароль", type="password", key="login_pass")
+    with colC:
+        st.write("")
+        st.write("")
+        if st.button("Войти →", use_container_width=True):
+            c.execute("SELECT * FROM users WHERE username = ?", (username,))
+            u = c.fetchone()
+            if u and bcrypt.checkpw(password.encode(), u[2]):
+                st.session_state["user"] = u
+                st.rerun()
+            st.error("Неверный логин или пароль")
 
 if "user" not in st.session_state:
     login()
@@ -76,92 +212,393 @@ if "user" not in st.session_state:
 
 user = st.session_state["user"]
 
-# ===============================
-# АДМИН ПАНЕЛЬ
-# ===============================
+# =====================================================
+# SIDEBAR
+# =====================================================
+st.sidebar.markdown(f"### 👤 {user[3]}")
+if st.sidebar.button("🚪 Выйти", use_container_width=True):
+    st.session_state.clear()
+    st.rerun()
 
-if user[3] == "admin":
+# =====================================================
+# ADMIN
+# =====================================================
+if user[4] == "admin":
+    menu = st.sidebar.radio("Навигация", ["Создать сотрудника", "Создать отчет", "Все отчеты"])
 
-    st.sidebar.title("👑 Админ панель")
+    # ---------- Create employee ----------
+    if menu == "Создать сотрудника":
+        st.markdown("<h1 class='title'>👥 Сотрудники</h1><div class='subtitle'>Создание аккаунта сотрудника</div>", unsafe_allow_html=True)
 
-    if st.sidebar.button("Добавить сотрудника"):
-        new_user = st.sidebar.text_input("Логин сотрудника")
-        new_pass = st.sidebar.text_input("Пароль", type="password")
+        with st.container():
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            full_name = st.text_input("Имя сотрудника (для отображения)")
+            username = st.text_input("Логин")
+            password = st.text_input("Пароль", type="password")
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                if st.button("Создать", use_container_width=True):
+                    if not full_name or not username or not password:
+                        st.warning("Заполни все поля")
+                    else:
+                        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+                        try:
+                            c.execute(
+                                "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+                                (username, hashed, full_name, "employee"),
+                            )
+                            conn.commit()
+                            st.success("Сотрудник создан")
+                        except:
+                            st.error("Логин уже существует")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        if st.sidebar.button("Создать"):
-            hashed = bcrypt.hashpw(new_pass.encode(), bcrypt.gensalt())
-            c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                      (new_user, hashed, "employee"))
+    # ---------- Create report ----------
+    if menu == "Создать отчет":
+        st.markdown("<h1 class='title'>➕ Новый отчет</h1><div class='subtitle'>Создание отчёта за неделю</div>", unsafe_allow_html=True)
+
+        employees = pd.read_sql("SELECT id, full_name FROM users WHERE role='employee'", conn)
+        if employees.empty:
+            st.info("Сначала создай сотрудника")
+            st.stop()
+
+        with st.container():
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            emp_name = st.selectbox("Сотрудник", employees["full_name"])
+            colA, colB, colC = st.columns([1, 1, 1])
+            year = int(colA.number_input("Год", value=datetime.now().year))
+            week = int(colB.number_input("Неделя (ISO)", min_value=1, max_value=53, value=int(datetime.now().isocalendar().week)))
+            usd_rate = float(colC.number_input("Курс USD (₽)", value=77.0, step=1.0))
+
+            start, end = get_week_range(year, week)
+            st.caption(f"Период: {start} — {end}")
+
+            col1, col2, col3 = st.columns(3)
+            income = float(col1.number_input("Доход ($)", 0.0))
+            bonus = float(col2.number_input("Премия ($)", 0.0))
+            percent = float(col3.number_input("Процент сотрудника (%)", value=30.0, min_value=0.0, max_value=100.0))
+
+            col3, col4, col5 = st.columns(3)
+            brocards = float(col3.number_input("Brocards ($)", 0.0))
+            rent = float(col4.number_input("Аренда ($)", 0.0))
+            supplies = float(col5.number_input("Расходники ($)", 0.0))
+
+            profit = income - (brocards + rent + supplies)
+            salary = profit * (percent / 100)
+            total = salary + bonus
+
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+<div class="kpiRow">
+  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата (30%)</div><div class="kpiValue">{money(salary)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Премия</div><div class="kpiValue">{money(bonus)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Итого к выплате</div><div class="kpiValue money">{money(total)} $</div></div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+            status = st.selectbox("Статус", ["Открыт", "Выплачен"], index=0)
+
+            if st.button("Сохранить отчет", use_container_width=True):
+                user_id = int(employees.loc[employees["full_name"] == emp_name, "id"].values[0])
+                c.execute(
+                    """
+                    INSERT INTO salaries
+                    (user_id, year, week, income, brocards, rent, supplies, bonus, usd_rate, percent, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        year,
+                        week,
+                        income,
+                        brocards,
+                        rent,
+                        supplies,
+                        bonus,
+                        usd_rate,
+                        percent,
+                        status,
+                        datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    ),
+                )
+                conn.commit()
+                st.success("Отчет создан")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- All reports (edit) ----------
+    if menu == "Все отчеты":
+        st.markdown("<h1 class='title'>📚 Все отчеты</h1><div class='subtitle'>Редактирование и смена статуса</div>", unsafe_allow_html=True)
+
+        reports = pd.read_sql(
+            """
+            SELECT s.*, u.full_name
+            FROM salaries s
+            JOIN users u ON s.user_id = u.id
+            ORDER BY s.id DESC
+            """,
+            conn,
+        )
+        if reports.empty:
+            st.info("Нет отчетов")
+            st.stop()
+
+        # Pretty select labels
+        options = []
+        for _, r in reports.iterrows():
+            start, end = get_week_range(int(r["year"]), int(r["week"]))
+            label = f"#{int(r['id'])} — {r['full_name']} — {start} - {end} — {r['status']}"
+            options.append((label, int(r["id"])))
+
+        picked = st.selectbox("Выберите отчет", options, format_func=lambda x: x[0])
+        selected_id = picked[1]
+
+        report = reports[reports["id"] == selected_id].iloc[0]
+        start, end = get_week_range(int(report["year"]), int(report["week"]))
+
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"### ✏️ Отчет #{selected_id}  \n<span class='small'>{report['full_name']} • {start} — {end}</span>", unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        income = col1.number_input("Доход ($)", value=float(report["income"]))
+        bonus = col2.number_input("Премия ($)", value=float(report["bonus"]))
+
+        col3, col4, col5 = st.columns(3)
+        brocards = col3.number_input("Brocards ($)", value=float(report["brocards"]))
+        rent = col4.number_input("Аренда ($)", value=float(report["rent"]))
+        supplies = col5.number_input("Расходники ($)", value=float(report["supplies"]))
+
+        colA, colB = st.columns(2)
+        usd_rate = colA.number_input("Курс USD (₽)", value=float(report["usd_rate"]))
+        percent = colA.number_input("Процент сотрудника (%)", value=float(report["percent"]))
+        status = colB.selectbox("Статус", ["Открыт", "Выплачен"], index=0 if report["status"] == "Открыт" else 1)
+
+        profit, salary, total = calc_total(income, brocards, rent, supplies, bonus)
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+<div class="kpiRow">
+  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата (30%)</div><div class="kpiValue">{money(salary)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(total * float(usd_rate))} ₽</div></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        if st.button("💾 Сохранить изменения", use_container_width=True):
+            c.execute(
+                """
+                UPDATE salaries SET
+                  income=?,
+                  brocards=?,
+                  rent=?,
+                  supplies=?,
+                  bonus=?,
+                  usd_rate=?,
+                  percent=?,
+                  status=?
+                WHERE id=?
+                """,
+                (income, brocards, rent, supplies, bonus, usd_rate, percent, status, selected_id),
+            )
             conn.commit()
-            st.success("Сотрудник создан")
+            st.success("Сохранено")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.header("Добавить расчет")
+# =====================================================
+# EMPLOYEE
+# =====================================================
+if user[4] == "employee":
 
-    employees = pd.read_sql("SELECT * FROM users WHERE role='employee'", conn)
-
-    if employees.empty:
-    	st.warning("Сначала создайте сотрудника в админ панели")
-    	st.stop()
-
-    emp_name = st.selectbox("Сотрудник", employees["username"])
-    period = st.date_input("Период")
-    income = st.number_input("Доход", 0.0)
-    brocards = st.number_input("Brocards", 0.0)
-    rent = st.number_input("Аренда", 0.0)
-    supplies = st.number_input("Расходники", 0.0)
-    kpi = st.checkbox("KPI включен")
-
-    if st.button("Сохранить расчет"):
-        user_id = employees[employees["username"] == emp_name]["id"].values[0]
-        c.execute("""
-        INSERT INTO salaries (user_id, period, income, brocards, rent, supplies, kpi_enabled)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, str(period), income, brocards, rent, supplies, int(kpi)))
-        conn.commit()
-        st.success("Сохранено")
-
-# ===============================
-# СТРАНИЦА СОТРУДНИКА
-# ===============================
-
-st.header("📊 Моя зарплата")
-
-if user[3] == "employee":
-    data = pd.read_sql(f"SELECT * FROM salaries WHERE user_id={user[0]}", conn)
-else:
-    data = pd.read_sql("SELECT * FROM salaries", conn)
-
-if not data.empty:
-
-    selected_period = st.selectbox("Выберите период", data["period"].unique())
-    row = data[data["period"] == selected_period].iloc[0]
-
-    total_expense = row["brocards"] + row["rent"] + row["supplies"]
-    profit = row["income"] - total_expense
-
-    if row["kpi_enabled"] == 1:
-        profit = profit * 0.8
-
-    st.metric("Чистая прибыль", f"{profit} $")
-
-    # ===== График =====
-    st.subheader("📈 Динамика прибыли")
-
-    data["profit"] = data["income"] - (
-        data["brocards"] + data["rent"] + data["supplies"]
+    st.markdown(
+        "<h1 class='title'>📄 Мои отчеты</h1>",
+        unsafe_allow_html=True
     )
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=data["period"],
-        y=data["profit"],
-        fill='tozeroy',
-        mode='lines+markers',
-        name='Чистая прибыль'
-    ))
+    user_id = int(user[0])
+    full_name = user[3]
 
-    fig.update_layout(template="simple_white")
-    st.plotly_chart(fig)
+    data = pd.read_sql(
+        "SELECT * FROM salaries WHERE user_id=? ORDER BY id DESC",
+        conn,
+        params=(user_id,)
+    )
 
-else:
-    st.info("Данных пока нет")
+    if data.empty:
+        st.info("Пока нет отчетов")
+        st.stop()
+
+    if "selected_report" not in st.session_state:
+        st.session_state["selected_report"] = None
+
+    # =====================================================
+    # LIST
+    # =====================================================
+    if st.session_state["selected_report"] is None:
+
+        header_cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
+        header_cols[0].markdown("<span class='small'>ID</span>", unsafe_allow_html=True)
+        header_cols[1].markdown("<span class='small'>Сотрудник</span>", unsafe_allow_html=True)
+        header_cols[2].markdown("<span class='small'>Выплата</span>", unsafe_allow_html=True)
+        header_cols[3].markdown("<span class='small'>Статус</span>", unsafe_allow_html=True)
+        header_cols[4].markdown("<span class='small'>Период</span>", unsafe_allow_html=True)
+        header_cols[5].markdown("<span class='small'>Создан</span>", unsafe_allow_html=True)
+
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        for _, row in data.iterrows():
+
+            start, end = get_week_range(int(row["year"]), int(row["week"]))
+            profit, salary, total = calc_total(
+                row["income"],
+                row["brocards"],
+                row["rent"],
+                row["supplies"],
+                row["bonus"],
+            )
+
+            badge = (
+                "<span class='badge badgeOpen'>Открыт</span>"
+                if row["status"] == "Открыт"
+                else "<span class='badge badgePaid'>Выплачен</span>"
+            )
+
+            cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
+
+            with cols[0]:
+                if st.button(str(int(row["id"])), key=f"row_{int(row['id'])}"):
+                    st.session_state["selected_report"] = int(row["id"])
+                    st.rerun()
+
+            cols[1].markdown(full_name)
+            cols[2].markdown(f"<span class='money'>{money(total)} $</span>", unsafe_allow_html=True)
+            cols[3].markdown(badge, unsafe_allow_html=True)
+            cols[4].markdown(f"{start} - {end}")
+            cols[5].markdown(row["created_at"] or "-")
+
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+    # =====================================================
+    # DETAIL
+    # =====================================================
+    else:
+
+        report_id = int(st.session_state["selected_report"])
+        report = data[data["id"] == report_id].iloc[0]
+        start, end = get_week_range(int(report["year"]), int(report["week"]))
+
+        income = float(report["income"])
+        brocards = float(report["brocards"])
+        rent = float(report["rent"])
+        supplies = float(report["supplies"])
+        bonus = float(report["bonus"])
+        usd_rate = float(report["usd_rate"])
+
+        total_expense = brocards + rent + supplies
+        profit = income - total_expense
+        percent = float(report["percent"]) if "percent" in report else 30
+        salary = profit * (percent / 100)
+        total_payment = salary + bonus
+        rub_total = total_payment * usd_rate
+
+        badge = (
+            "<span class='badge badgeOpen'>Открыт</span>"
+            if report["status"] == "Открыт"
+            else "<span class='badge badgePaid'>Выплачен</span>"
+        )
+
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+        # HEADER
+        st.markdown(
+            f"""
+<div class="cardHeader">
+  <div>
+    <div style="font-size:18px; font-weight:800;">
+      Отчет • {start} — {end}
+    </div>
+    <div class="small">{full_name}</div>
+  </div>
+  <div>{badge}</div>
+</div>
+<div class="hr"></div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        # KPI 1
+        st.markdown(
+            f"""
+<div class="kpiRow">
+  <div class="kpi"><div class="kpiLabel">Курс USD</div><div class="kpiValue">{money(usd_rate)} ₽</div></div>
+  <div class="kpi"><div class="kpiLabel">Доход</div><div class="kpiValue">{money(income)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Расход</div><div class="kpiValue">{money(total_expense)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        # KPI 2
+        st.markdown(
+            f"""
+<div class="kpiRow">
+  <div class="kpi"><div class="kpiLabel">Brocards</div><div class="kpiValue">{money(brocards)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Аренда</div><div class="kpiValue">{money(rent)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Расходники</div><div class="kpiValue">{money(supplies)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue">{money(salary)} $</div></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        # ПРЕМИЯ
+        if bonus > 0:
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+<div class="kpiRow">
+  <div class="kpi">
+    <div class="kpiLabel">💰 Премия</div>
+    <div class="kpiValue" style="color:#FBBF24;">
+      {money(bonus)} $
+    </div>
+  </div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        # ИТОГ
+        st.markdown(
+            f"""
+<div class="kpiRow">
+  <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total_payment)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(rub_total)} ₽</div></div>
+  <div class="kpi">
+    <div class="kpiLabel">Формула</div>
+    <div class="kpiValue" style="font-size:14px;">
+      ({money(income)} - {money(brocards)} - {money(rent)} - {money(supplies)})
+    </div>
+  </div>
+  <div class="kpi"><div class="kpiLabel">= Прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        st.write("")
+        if st.button("← Назад к списку", use_container_width=True):
+            st.session_state["selected_report"] = None
+            st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
