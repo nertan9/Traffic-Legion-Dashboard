@@ -98,6 +98,11 @@ if user[3] == "admin":
     st.header("Добавить расчет")
 
     employees = pd.read_sql("SELECT * FROM users WHERE role='employee'", conn)
+
+    if employees.empty:
+    	st.warning("Сначала создайте сотрудника в админ панели")
+    	st.stop()
+
     emp_name = st.selectbox("Сотрудник", employees["username"])
     period = st.date_input("Период")
     income = st.number_input("Доход", 0.0)
