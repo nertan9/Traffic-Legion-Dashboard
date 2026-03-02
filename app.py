@@ -155,13 +155,20 @@ conn.commit()
 # =====================================================
 # CREATE ADMIN
 # =====================================================
+import os
+
 def create_admin():
-    c.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
+    try:
+        admin_password = st.secrets["ADMIN_PASSWORD"]
+    except Exception:
+        return  # если локально нет secrets — просто не создаём
+
+    c.execute("SELECT 1 FROM users WHERE username='admin'")
     if not c.fetchone():
-        hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt())
+        hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
         c.execute(
-            "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
-            ("admin", hashed, "Администратор", "admin"),
+            "INSERT INTO users (username,password,full_name,role) VALUES (?,?,?,?)",
+            ("admin", hashed, "Администратор", "admin")
         )
         conn.commit()
 
