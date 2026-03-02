@@ -555,18 +555,18 @@ if user[4] == "admin":
                 price_color = "#22C55E" if enough else "#EF4444"
 
                 st.markdown(f"""
-                <div class="shop-card">
-                    <div class="shop-img">
-                        <img src="https://picsum.photos/300" />
-                    </div>
+<div class="shop-card">
+ <div class="shop-img">
+  <img src="https://picsum.photos/300" />
+ </div>
 
-                    <div class="shop-title">{r['name']}</div>
-                    <div class="shop-desc">{r['description']}</div>
+ <div class="shop-title">{r['name']}</div>
+ <div class="shop-desc">{r['description']}</div>
 
-                    <div class="shop-price" style="color:{price_color}">
-                        {r['price']} очков
-                    </div>
-                </div>
+ <div class="shop-price" style="color:{price_color}">
+  {r['price']} очков
+ </div>
+</div>
                 """, unsafe_allow_html=True)
 
                 if st.button(
