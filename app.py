@@ -238,113 +238,140 @@ if st.sidebar.button("🚪 Выйти", use_container_width=True):
 # ADMIN
 # =====================================================
 if user[4] == "admin":
+
     menu = st.sidebar.radio("Навигация", ["Создать сотрудника", "Создать отчет", "Все отчеты"])
 
-    # ---------- Create employee ----------
+    # =====================================================
+    # СОЗДАТЬ СОТРУДНИКА
+    # =====================================================
     if menu == "Создать сотрудника":
+
         st.markdown("<h1 class='title'>👥 Сотрудники</h1><div class='subtitle'>Создание аккаунта сотрудника</div>", unsafe_allow_html=True)
 
-        with st.container():
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            full_name = st.text_input("Имя сотрудника (для отображения)")
-            username = st.text_input("Логин")
-            password = st.text_input("Пароль", type="password")
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                if st.button("Создать", use_container_width=True):
-                    if not full_name or not username or not password:
-                        st.warning("Заполни все поля")
-                    else:
-                        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-                        try:
-                            c.execute(
-                                "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
-                                (username, hashed, full_name, "employee"),
-                            )
-                            conn.commit()
-                            st.success("Сотрудник создан")
-                        except:
-                            st.error("Логин уже существует")
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    # ---------- Create report ----------
+        full_name = st.text_input("Имя сотрудника (для отображения)")
+        username = st.text_input("Логин")
+        password = st.text_input("Пароль", type="password")
+
+        if st.button("Создать", use_container_width=True):
+
+            if not full_name or not username or not password:
+                st.warning("Заполни все поля")
+
+            else:
+                hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+
+                try:
+                    c.execute(
+                        "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+                        (username, hashed, full_name, "employee"),
+                    )
+                    conn.commit()
+                    st.success("Сотрудник создан")
+
+                except:
+                    st.error("Логин уже существует")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # =====================================================
+    # СОЗДАТЬ ОТЧЕТ
+    # =====================================================
     if menu == "Создать отчет":
+
         st.markdown("<h1 class='title'>➕ Новый отчет</h1><div class='subtitle'>Создание отчёта за неделю</div>", unsafe_allow_html=True)
 
         employees = pd.read_sql("SELECT id, full_name FROM users WHERE role='employee'", conn)
+
         if employees.empty:
             st.info("Сначала создай сотрудника")
             st.stop()
 
-        with st.container():
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            emp_name = st.selectbox("Сотрудник", employees["full_name"])
-            colA, colB, colC = st.columns([1, 1, 1])
-            year = int(colA.number_input("Год", value=datetime.now().year))
-            week = int(colB.number_input("Неделя (ISO)", min_value=1, max_value=53, value=int(datetime.now().isocalendar().week)))
-            usd_rate = float(colC.number_input("Курс USD (₽)", value=77.0, step=1.0))
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-            start, end = get_week_range(year, week)
-            st.caption(f"Период: {start} — {end}")
+        emp_name = st.selectbox("Сотрудник", employees["full_name"])
 
-            col1, col2, col3 = st.columns(3)
-            income = float(col1.number_input("Доход ($)", 0.0))
-            bonus = float(col2.number_input("Премия ($)", 0.0))
-            percent = float(col3.number_input("Процент сотрудника (%)", value=30.0, min_value=0.0, max_value=100.0))
+        colA, colB, colC = st.columns(3)
+        year = int(colA.number_input("Год", value=datetime.now().year))
+        week = int(colB.number_input("Неделя (ISO)", min_value=1, max_value=53, value=int(datetime.now().isocalendar().week)))
+        usd_rate = float(colC.number_input("Курс USD (₽)", value=77.0, step=1.0))
 
-            col3, col4, col5 = st.columns(3)
-            brocards = float(col3.number_input("Brocards ($)", 0.0))
-            rent = float(col4.number_input("Аренда ($)", 0.0))
-            supplies = float(col5.number_input("Расходники ($)", 0.0))
+        start, end = get_week_range(year, week)
+        st.caption(f"Период: {start} — {end}")
 
-            profit = income - (brocards + rent + supplies)
+        col1, col2, col3 = st.columns(3)
+        income = float(col1.number_input("Доход ($)", 0.0))
+        bonus = float(col2.number_input("Премия ($)", 0.0))
+        percent = float(col3.number_input("Процент сотрудника (%)", value=30.0, min_value=0.0, max_value=100.0))
+
+        col4, col5, col6 = st.columns(3)
+        brocards = float(col4.number_input("Brocards ($)", 0.0))
+        rent = float(col5.number_input("Аренда ($)", 0.0))
+        supplies = float(col6.number_input("Расходники ($)", 0.0))
+
+        # ---------- ЗАЩИЩЕННЫЙ РАСЧЕТ ----------
+        profit = income - (brocards + rent + supplies)
+
+        if profit <= 0:
+            salary = 0
+        else:
             salary = profit * (percent / 100)
-            total = salary + bonus
 
-            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-            st.markdown(
-                f"""
+        total = max(salary + bonus, 0)
+
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        st.markdown(
+            f"""
 <div class="kpiRow">
   <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата (30%)</div><div class="kpiValue">{money(salary)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата</div><div class="kpiValue">{money(salary)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Премия</div><div class="kpiValue">{money(bonus)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Итого к выплате</div><div class="kpiValue money">{money(total)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Итого</div><div class="kpiValue money">{money(total)} $</div></div>
 </div>
 """,
-                unsafe_allow_html=True,
+            unsafe_allow_html=True,
+        )
+
+        status = st.selectbox("Статус", ["Открыт", "Выплачен"])
+
+        if st.button("Сохранить отчет", use_container_width=True):
+
+            user_id = int(employees.loc[employees["full_name"] == emp_name, "id"].values[0])
+
+            c.execute(
+                """
+                INSERT INTO salaries
+                (user_id, year, week, income, brocards, rent, supplies, bonus, percent, usd_rate, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    year,
+                    week,
+                    income,
+                    brocards,
+                    rent,
+                    supplies,
+                    bonus,
+                    percent,
+                    usd_rate,
+                    status,
+                    datetime.now().strftime("%Y-%m-%d %H:%M"),
+                ),
             )
 
-            status = st.selectbox("Статус", ["Открыт", "Выплачен"], index=0)
+            conn.commit()
+            st.success("Отчет создан")
 
-            if st.button("Сохранить отчет", use_container_width=True):
-                user_id = int(employees.loc[employees["full_name"] == emp_name, "id"].values[0])
-                c.execute(
-                    """
-                    INSERT INTO salaries
-                    (user_id, year, week, income, brocards, rent, supplies, bonus, usd_rate, percent, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        user_id,
-                        year,
-                        week,
-                        income,
-                        brocards,
-                        rent,
-                        supplies,
-                        bonus,
-                        usd_rate,
-                        percent,
-                        status,
-                        datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    ),
-                )
-                conn.commit()
-                st.success("Отчет создан")
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- All reports (edit) ----------
+    # =====================================================
+    # ВСЕ ОТЧЕТЫ (РЕДАКТИРОВАНИЕ)
+    # =====================================================
     if menu == "Все отчеты":
+
         st.markdown("<h1 class='title'>📚 Все отчеты</h1><div class='subtitle'>Редактирование и смена статуса</div>", unsafe_allow_html=True)
 
         reports = pd.read_sql(
@@ -356,11 +383,11 @@ if user[4] == "admin":
             """,
             conn,
         )
+
         if reports.empty:
             st.info("Нет отчетов")
             st.stop()
 
-        # Pretty select labels
         options = []
         for _, r in reports.iterrows():
             start, end = get_week_range(int(r["year"]), int(r["week"]))
@@ -390,13 +417,23 @@ if user[4] == "admin":
         percent = colA.number_input("Процент сотрудника (%)", value=float(report["percent"]))
         status = colB.selectbox("Статус", ["Открыт", "Выплачен"], index=0 if report["status"] == "Открыт" else 1)
 
-        profit, salary, total = calc_total(income, brocards, rent, supplies, bonus)
+        # ---------- ЗАЩИЩЕННЫЙ РАСЧЕТ ----------
+        profit = income - (brocards + rent + supplies)
+
+        if profit <= 0:
+            salary = 0
+        else:
+            salary = profit * (percent / 100)
+
+        total = max(salary + bonus, 0)
+
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
         st.markdown(
             f"""
 <div class="kpiRow">
   <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата (30%)</div><div class="kpiValue">{money(salary)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата</div><div class="kpiValue">{money(salary)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(total * float(usd_rate))} ₽</div></div>
 </div>
@@ -405,6 +442,7 @@ if user[4] == "admin":
         )
 
         if st.button("💾 Сохранить изменения", use_container_width=True):
+
             c.execute(
                 """
                 UPDATE salaries SET
@@ -420,8 +458,10 @@ if user[4] == "admin":
                 """,
                 (income, brocards, rent, supplies, bonus, usd_rate, percent, status, selected_id),
             )
+
             conn.commit()
             st.success("Сохранено")
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================================================
