@@ -298,7 +298,7 @@ if count == 0:
         INSERT INTO rewards (name, description, image_url, price)
         VALUES 
         ('AirPods Pro', 'Беспроводные наушники Apple', 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MQD83?wid=572&hei=572&fmt=jpeg&qlt=95&.v=1660803972361', 300),
-        ('MacBook Air', 'Ноутбук для работы', 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-m1-2020-space-gray-gallery1?wid=4000&hei=3072&fmt=jpeg&qlt=95&.v=1604278672000', 1000)
+        ('MacBook Air', 'Ноутбук для работы', 'https://images.macrumors.com/t/AI0UfpE0Io0I3yfew8TtFUxyi3s=/800x0/smart/article-new/2013/09/macbook-air-m2-roundup-header.png?lossy', 1000)
     """)
     conn.commit()
 
