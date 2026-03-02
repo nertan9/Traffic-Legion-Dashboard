@@ -616,23 +616,23 @@ if user[4] == "admin":
                 btn_class = "shop-btn-enabled" if enough else "shop-btn-disabled"
 
                 card_html = textwrap.dedent(f"""
-            <div class="shop-card">
-                <div class="shop-img">
-                    <img src="{r['image_url']}" />
-                </div>
+<div class="shop-card">
+ <div class="shop-img">
+  <img src="{r['image_url']}" />
+ </div>
 
-                <div class="shop-title">{r['name']}</div>
-                <div class="shop-desc">{r['description']}</div>
+ <div class="shop-title">{r['name']}</div>
+ <div class="shop-desc">{r['description']}</div>
 
-                <div class="shop-price" style="color:{price_color}">
-                    {int(r['price'])} очков
-                </div>
+ <div class="shop-price" style="color:{price_color}">
+  {int(r['price'])} очков
+ </div>
 
-                <div class="shop-btn {btn_class}">
-                    {"Обменять" if enough else "Недостаточно очков"}
-                </div>
-            </div>
-            """).strip()
+ <div class="shop-btn {btn_class}">
+  {"Обменять" if enough else "Недостаточно очков"}
+ </div>
+</div>
+""").strip()
 
                 st.markdown(card_html, unsafe_allow_html=True)
 
