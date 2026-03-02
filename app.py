@@ -553,6 +553,17 @@ if user[4] == "admin":
             )
             conn.commit()
             st.success("Сохранено")
+            
+            st.write("")
+
+            if st.button("🗑 Удалить отчет", use_container_width=True):
+                c.execute("DELETE FROM salaries WHERE id=?", (selected_id,))
+                conn.commit()
+
+                recalc_all_debts()  # пересчет цепочки долгов
+
+                st.success("Отчет удален")
+                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
