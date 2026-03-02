@@ -165,6 +165,45 @@ button[kind="secondary"]:hover{
   margin-top: 6px;
 }
 
+/* =========================================
+   PREMIUM FADE-IN ANIMATION
+========================================= */
+
+.card,
+.kpi,
+.card-small {
+  opacity: 0;
+  transform: translateY(16px);
+  filter: blur(6px);
+  animation: fadeUp .6s cubic-bezier(.22,.61,.36,1) forwards;
+}
+
+/* Каскадная задержка для KPI */
+.kpi:nth-child(1) { animation-delay: .05s; }
+.kpi:nth-child(2) { animation-delay: .1s; }
+.kpi:nth-child(3) { animation-delay: .15s; }
+.kpi:nth-child(4) { animation-delay: .2s; }
+.kpi:nth-child(5) { animation-delay: .25s; }
+.kpi:nth-child(6) { animation-delay: .3s; }
+
+/* Для маленьких карточек */
+.card-small:nth-child(1) { animation-delay: .08s; }
+.card-small:nth-child(2) { animation-delay: .16s; }
+.card-small:nth-child(3) { animation-delay: .24s; }
+
+@keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
 </style>
 """,
     unsafe_allow_html=True,
