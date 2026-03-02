@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import bcrypt
+import textwrap
 from datetime import datetime, timedelta
 
 # =====================================================
@@ -298,6 +299,13 @@ button[kind="secondary"]:hover{
   cursor:not-allowed;
 }
 
+div.stButton > button {
+  opacity: 0;
+  height: 0px;
+  padding: 0;
+  margin: 0;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -577,7 +585,11 @@ if user[4] == "admin":
 
     if menu == "Магазин":
 
-        st.markdown("<h1 class='title'>🎁 Магазин наград</h1><div class='subtitle'>Обмен очков на подарки</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<h1 class='title'>🎁 Магазин наград</h1>"
+            "<div class='subtitle'>Обмен очков на подарки</div>",
+            unsafe_allow_html=True
+        )
 
         rewards = pd.read_sql("SELECT * FROM rewards", conn)
 
@@ -587,7 +599,11 @@ if user[4] == "admin":
 
         user_points = get_user_points(user[0])
 
-        st.markdown(f"<div class='card'><b>Ваши очки:</b> {user_points}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='card'><b>Ваши очки:</b> {user_points}</div>",
+            unsafe_allow_html=True
+        )
+
         st.write("")
 
         cols = st.columns(3)
@@ -599,32 +615,37 @@ if user[4] == "admin":
                 price_color = "#22C55E" if enough else "#EF4444"
                 btn_class = "shop-btn-enabled" if enough else "shop-btn-disabled"
 
-                st.markdown(f"""
-<div class="shop-card">
-    <div class="shop-img">
-        <img src="{r['image_url']}" />
-    </div>
+                card_html = textwrap.dedent(f"""
+            <div class="shop-card">
+                <div class="shop-img">
+                    <img src="{r['image_url']}" />
+                </div>
 
-    <div class="shop-title">{r['name']}</div>
-    <div class="shop-desc">{r['description']}</div>
+                <div class="shop-title">{r['name']}</div>
+                <div class="shop-desc">{r['description']}</div>
 
-    <div class="shop-price" style="color:{price_color}">
-        {r['price']} очков
-    </div>
+                <div class="shop-price" style="color:{price_color}">
+                    {int(r['price'])} очков
+                </div>
 
-    <div class="shop-btn {btn_class}">
-        {"Обменять" if enough else "Недостаточно очков"}
-    </div>
-</div>
-""", unsafe_allow_html=True)
+                <div class="shop-btn {btn_class}">
+                    {"Обменять" if enough else "Недостаточно очков"}
+                </div>
+            </div>
+            """).strip()
+
+                st.markdown(card_html, unsafe_allow_html=True)
+
+            # Логика покупки (реальная кнопка)
                 if enough:
-                    if st.button("Обменять", key=f"buy_{r['id']}", use_container_width=True):
+                    if st.button("Обменять", key=f"buy_{r['id']}"):
                         c.execute(
                             "INSERT INTO reward_orders (user_id, reward_id, created_at) VALUES (?, ?, ?)",
                             (user[0], r["id"], datetime.now().strftime("%Y-%m-%d %H:%M"))
                         )
                         conn.commit()
                         st.success("Запрос отправлен")
+                        st.rerun()
                 
 
                 
