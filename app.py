@@ -557,7 +557,7 @@ if user[4] == "admin":
                 st.markdown(f"""
 <div class="shop-card">
  <div class="shop-img">
-  <img src="https://picsum.photos/300" />
+  <img src="{r['image_url']}" />
  </div>
 
  <div class="shop-title">{r['name']}</div>
