@@ -152,6 +152,20 @@ CREATE TABLE IF NOT EXISTS salaries (
 
 conn.commit()
 
+# ===================== DB MIGRATION (debt columns) =====================
+def ensure_debt_columns():
+    try:
+        c.execute("ALTER TABLE salaries ADD COLUMN debt_in REAL DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE salaries ADD COLUMN debt_out REAL DEFAULT 0")
+    except Exception:
+        pass
+    conn.commit()
+
+ensure_debt_columns()
+
 # =====================================================
 # CREATE ADMIN
 # =====================================================
@@ -184,6 +198,38 @@ def get_week_range(year: int, week: int):
 
 def money(x):
     return f"{round(float(x), 2):,.2f}".replace(",", " ")
+
+def calc_with_debt(income, brocards, rent, supplies, bonus, percent, debt_in):
+    """
+    debt_in: 0 или отрицательное число (например -1200).
+    Минус вычитается из ПРИБЫЛИ недели:
+      base_profit = income - expenses
+      adj_profit  = base_profit + debt_in   (debt_in отрицательный => уменьшает прибыль)
+      salary      = max(adj_profit, 0) * percent
+      debt_out    = min(adj_profit, 0)      (если всё ещё минус — переносим дальше)
+      total       = max(salary + bonus, 0)
+    """
+    income = float(income)
+    brocards = float(brocards)
+    rent = float(rent)
+    supplies = float(supplies)
+    bonus = float(bonus)
+    percent = float(percent)
+    debt_in = float(debt_in)
+
+    expenses = brocards + rent + supplies
+    base_profit = income - expenses
+    adj_profit = base_profit + debt_in
+
+    if adj_profit <= 0:
+        salary = 0.0
+    else:
+        salary = adj_profit * (percent / 100.0)
+
+    total = max(salary + bonus, 0.0)
+    debt_out = min(adj_profit, 0.0)
+
+    return base_profit, adj_profit, salary, total, debt_out
 
 def calc_total(income, brocards, rent, supplies, bonus):
     profit = income - (brocards + rent + supplies)
@@ -237,6 +283,9 @@ if st.sidebar.button("🚪 Выйти", use_container_width=True):
 # =====================================================
 # ADMIN
 # =====================================================
+# =====================================================
+# ADMIN
+# =====================================================
 if user[4] == "admin":
 
     menu = st.sidebar.radio("Навигация", ["Создать сотрудника", "Создать отчет", "Все отчеты"])
@@ -245,23 +294,18 @@ if user[4] == "admin":
     # СОЗДАТЬ СОТРУДНИКА
     # =====================================================
     if menu == "Создать сотрудника":
-
         st.markdown("<h1 class='title'>👥 Сотрудники</h1><div class='subtitle'>Создание аккаунта сотрудника</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-
         full_name = st.text_input("Имя сотрудника (для отображения)")
         username = st.text_input("Логин")
         password = st.text_input("Пароль", type="password")
 
         if st.button("Создать", use_container_width=True):
-
             if not full_name or not username or not password:
                 st.warning("Заполни все поля")
-
             else:
                 hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-
                 try:
                     c.execute(
                         "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
@@ -269,21 +313,17 @@ if user[4] == "admin":
                     )
                     conn.commit()
                     st.success("Сотрудник создан")
-
                 except:
                     st.error("Логин уже существует")
-
         st.markdown("</div>", unsafe_allow_html=True)
 
     # =====================================================
-    # СОЗДАТЬ ОТЧЕТ
+    # СОЗДАТЬ ОТЧЕТ  (перенос долга тут работает)
     # =====================================================
     if menu == "Создать отчет":
-
         st.markdown("<h1 class='title'>➕ Новый отчет</h1><div class='subtitle'>Создание отчёта за неделю</div>", unsafe_allow_html=True)
 
         employees = pd.read_sql("SELECT id, full_name FROM users WHERE role='employee'", conn)
-
         if employees.empty:
             st.info("Сначала создай сотрудника")
             st.stop()
@@ -291,6 +331,7 @@ if user[4] == "admin":
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
         emp_name = st.selectbox("Сотрудник", employees["full_name"])
+        user_id = int(employees.loc[employees["full_name"] == emp_name, "id"].values[0])
 
         colA, colB, colC = st.columns(3)
         year = int(colA.number_input("Год", value=datetime.now().year))
@@ -310,58 +351,51 @@ if user[4] == "admin":
         rent = float(col5.number_input("Аренда ($)", 0.0))
         supplies = float(col6.number_input("Расходники ($)", 0.0))
 
-        # ---------- ЗАЩИЩЕННЫЙ РАСЧЕТ ----------
-        profit = income - (brocards + rent + supplies)
+        # долг из прошлого отчета
+        c.execute("""
+            SELECT debt_out
+            FROM salaries
+            WHERE user_id = ?
+            ORDER BY year DESC, week DESC, id DESC
+            LIMIT 1
+        """, (user_id,))
+        prev = c.fetchone()
+        debt_in = float(prev[0]) if prev and prev[0] is not None else 0.0
 
-        if profit <= 0:
-            salary = 0
-        else:
-            salary = profit * (percent / 100)
-
-        total = max(salary + bonus, 0)
+        base_profit, adj_profit, salary, total, debt_out = calc_with_debt(
+            income, brocards, rent, supplies, bonus, percent, debt_in
+        )
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-
         st.markdown(
             f"""
 <div class="kpiRow">
-  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата</div><div class="kpiValue">{money(salary)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Премия</div><div class="kpiValue">{money(bonus)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Итого</div><div class="kpiValue money">{money(total)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Долг из прошлого</div><div class="kpiValue">{money(debt_in)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Прибыль недели</div><div class="kpiValue">{money(base_profit)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Прибыль с долгом</div><div class="kpiValue">{money(adj_profit)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Долг дальше</div><div class="kpiValue">{money(debt_out)} $</div></div>
 </div>
 """,
             unsafe_allow_html=True,
         )
 
-        status = st.selectbox("Статус", ["Открыт", "Выплачен"])
+        status = st.selectbox("Статус", ["Открыт", "Выплачен"], index=0)
 
         if st.button("Сохранить отчет", use_container_width=True):
-
-            user_id = int(employees.loc[employees["full_name"] == emp_name, "id"].values[0])
-
             c.execute(
                 """
                 INSERT INTO salaries
-                (user_id, year, week, income, brocards, rent, supplies, bonus, percent, usd_rate, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, year, week, income, brocards, rent, supplies, bonus, percent, usd_rate, status, created_at, debt_in, debt_out)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    user_id,
-                    year,
-                    week,
-                    income,
-                    brocards,
-                    rent,
-                    supplies,
-                    bonus,
-                    percent,
-                    usd_rate,
-                    status,
-                    datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    user_id, year, week,
+                    income, brocards, rent, supplies,
+                    bonus, percent, usd_rate,
+                    status, datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    debt_in, debt_out
                 ),
             )
-
             conn.commit()
             st.success("Отчет создан")
 
@@ -372,14 +406,14 @@ if user[4] == "admin":
     # =====================================================
     if menu == "Все отчеты":
 
-        st.markdown("<h1 class='title'>📚 Все отчеты</h1><div class='subtitle'>Редактирование и смена статуса</div>", unsafe_allow_html=True)
+        st.markdown("<h1 class='title'>📚 Все отчеты</h1><div class='subtitle'>Редактирование и пересчёт задолженности</div>", unsafe_allow_html=True)
 
         reports = pd.read_sql(
             """
             SELECT s.*, u.full_name
             FROM salaries s
             JOIN users u ON s.user_id = u.id
-            ORDER BY s.id DESC
+            ORDER BY s.year DESC, s.week DESC, s.id DESC
             """,
             conn,
         )
@@ -388,6 +422,7 @@ if user[4] == "admin":
             st.info("Нет отчетов")
             st.stop()
 
+        # удобный список выбора (как ты хотел: сотрудник + период + статус)
         options = []
         for _, r in reports.iterrows():
             start, end = get_week_range(int(r["year"]), int(r["week"]))
@@ -401,8 +436,12 @@ if user[4] == "admin":
         start, end = get_week_range(int(report["year"]), int(report["week"]))
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown(f"### ✏️ Отчет #{selected_id}  \n<span class='small'>{report['full_name']} • {start} — {end}</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"### ✏️ Отчет #{selected_id}  \n<span class='small'>{report['full_name']} • {start} — {end}</span>",
+            unsafe_allow_html=True
+        )
 
+        # поля редактирования
         col1, col2 = st.columns(2)
         income = col1.number_input("Доход ($)", value=float(report["income"]))
         bonus = col2.number_input("Премия ($)", value=float(report["bonus"]))
@@ -414,35 +453,39 @@ if user[4] == "admin":
 
         colA, colB = st.columns(2)
         usd_rate = colA.number_input("Курс USD (₽)", value=float(report["usd_rate"]))
-        percent = colA.number_input("Процент сотрудника (%)", value=float(report["percent"]))
+        percent = colA.number_input("Процент сотрудника (%)", value=float(report["percent"]), min_value=0.0, max_value=100.0)
         status = colB.selectbox("Статус", ["Открыт", "Выплачен"], index=0 if report["status"] == "Открыт" else 1)
 
-        # ---------- ЗАЩИЩЕННЫЙ РАСЧЕТ ----------
-        profit = income - (brocards + rent + supplies)
+        # debt_in НЕ редактируем руками: он приходит из прошлого отчёта
+        debt_in = float(report["debt_in"]) if "debt_in" in report and report["debt_in"] is not None else 0.0
 
-        if profit <= 0:
-            salary = 0
-        else:
-            salary = profit * (percent / 100)
-
-        total = max(salary + bonus, 0)
+        # ✅ пересчёт по новой логике (долг вычитается из прибыли, а не из дохода)
+        base_profit, adj_profit, salary, total, debt_out = calc_with_debt(
+            income, brocards, rent, supplies, bonus, percent, debt_in
+        )
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
         st.markdown(
             f"""
-<div class="kpiRow">
-  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата</div><div class="kpiValue">{money(salary)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(total * float(usd_rate))} ₽</div></div>
-</div>
-""",
+    <div class="kpiRow">
+      <div class="kpi"><div class="kpiLabel">Задолженность (в отчёт)</div><div class="kpiValue">{money(debt_in)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Прибыль недели</div><div class="kpiValue">{money(base_profit)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Прибыль с учетом долга</div><div class="kpiValue">{money(adj_profit)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Долг дальше</div><div class="kpiValue">{money(debt_out)} $</div></div>
+    </div>
+    <div class="hr"></div>
+    <div class="kpiRow">
+      <div class="kpi"><div class="kpiLabel">Зарплата</div><div class="kpiValue money">{money(salary)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Премия</div><div class="kpiValue">{money(bonus)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(total * usd_rate)} ₽</div></div>
+    </div>
+    """,
             unsafe_allow_html=True,
         )
 
         if st.button("💾 Сохранить изменения", use_container_width=True):
-
             c.execute(
                 """
                 UPDATE salaries SET
@@ -453,12 +496,16 @@ if user[4] == "admin":
                   bonus=?,
                   usd_rate=?,
                   percent=?,
-                  status=?
+                  status=?,
+                  debt_out=?
                 WHERE id=?
                 """,
-                (income, brocards, rent, supplies, bonus, usd_rate, percent, status, selected_id),
+                (
+                    income, brocards, rent, supplies,
+                    bonus, usd_rate, percent, status,
+                    debt_out, selected_id
+                ),
             )
-
             conn.commit()
             st.success("Сохранено")
 
@@ -513,15 +560,13 @@ if user[4] == "employee":
             bonus = float(row["bonus"])
             percent = float(row["percent"])
 
-            profit = income - (brocards + rent + supplies)
+            # ✅ долг из прошлого отчёта (0 или отрицательный)
+            debt_in = float(row["debt_in"]) if "debt_in" in row and row["debt_in"] is not None else 0.0
 
-            # зарплата не может быть отрицательной
-            if profit <= 0:
-                salary = 0
-            else:
-                salary = profit * (percent / 100)
-
-            total_payment = max(salary + bonus, 0)
+            # ✅ расчёт с учётом долга (минус вычитается из ПРИБЫЛИ)
+            base_profit, adj_profit, salary, total_payment, debt_out = calc_with_debt(
+                income, brocards, rent, supplies, bonus, percent, debt_in
+            )
 
             badge = (
                 "<span class='badge badgeOpen'>Открыт</span>"
@@ -561,16 +606,15 @@ if user[4] == "employee":
         usd_rate = float(report["usd_rate"])
         percent = float(report["percent"])
 
+        # ✅ долг из прошлого отчёта (0 или отрицательный)
+        debt_in = float(report["debt_in"]) if "debt_in" in report and report["debt_in"] is not None else 0.0
+
+        # ✅ единый расчёт: минус вычитается из ПРИБЫЛИ недели
+        base_profit, adj_profit, salary, total_payment, debt_out = calc_with_debt(
+            income, brocards, rent, supplies, bonus, percent, debt_in
+        )
+
         total_expense = brocards + rent + supplies
-        profit = income - total_expense
-
-        # зарплата не может быть отрицательной
-        if profit <= 0:
-            salary = 0
-        else:
-            salary = profit * (percent / 100)
-
-        total_payment = max(salary + bonus, 0)
         rub_total = total_payment * usd_rate
 
         badge = (
@@ -584,50 +628,65 @@ if user[4] == "employee":
         # HEADER
         st.markdown(
             f"""
-<div class="cardHeader">
-  <div>
-    <div style="font-size:18px; font-weight:800;">
-      Отчет • {start} — {end}
+    <div class="cardHeader">
+      <div>
+        <div style="font-size:18px; font-weight:800;">
+          Отчет • {start} — {end}
+        </div>
+        <div class="small">{full_name}</div>
+      </div>
+      <div>{badge}</div>
     </div>
-    <div class="small">{full_name}</div>
-  </div>
-  <div>{badge}</div>
-</div>
-<div class="hr"></div>
-""",
+    <div class="hr"></div>
+    """,
             unsafe_allow_html=True,
         )
 
         # KPI BLOCK 1
         st.markdown(
             f"""
-<div class="kpiRow">
-  <div class="kpi"><div class="kpiLabel">Курс USD</div><div class="kpiValue">{money(usd_rate)} ₽</div></div>
-  <div class="kpi"><div class="kpiLabel">Доход</div><div class="kpiValue">{money(income)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Расход</div><div class="kpiValue">{money(total_expense)} $</div></div>
-  <div class="kpi">
-    <div class="kpiLabel">Чистая прибыль</div>
-    <div class="kpiValue" style="color:{'#EF4444' if profit < 0 else '#E5E7EB'};">
-      {money(profit)} $
+    <div class="kpiRow">
+      <div class="kpi"><div class="kpiLabel">Курс USD</div><div class="kpiValue">{money(usd_rate)} ₽</div></div>
+      <div class="kpi"><div class="kpiLabel">Доход</div><div class="kpiValue">{money(income)} $</div></div>
+      <div class="kpi"><div class="kpiLabel">Расход</div><div class="kpiValue">{money(total_expense)} $</div></div>
+      <div class="kpi">
+        <div class="kpiLabel">Прибыль недели</div>
+        <div class="kpiValue" style="color:{'#EF4444' if base_profit < 0 else '#E5E7EB'};">
+          {money(base_profit)} $
+        </div>
+      </div>
     </div>
-  </div>
-</div>
-""",
+    """,
             unsafe_allow_html=True,
         )
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        # KPI BLOCK 2
+        # KPI BLOCK 2 (долг + прибыль с учетом долга)
         st.markdown(
             f"""
-<div class="kpiRow">
-  <div class="kpi"><div class="kpiLabel">Brocards</div><div class="kpiValue">{money(brocards)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Аренда</div><div class="kpiValue">{money(rent)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Расходники</div><div class="kpiValue">{money(supplies)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue money">{money(salary)} $</div></div>
-</div>
-""",
+    <div class="kpiRow">
+      <div class="kpi">
+        <div class="kpiLabel">Задолженность с прошлого отчёта</div>
+        <div class="kpiValue" style="color:{'#EF4444' if debt_in < 0 else '#E5E7EB'};">
+          {money(debt_in)} $
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpiLabel">Прибыль с учетом долга</div>
+        <div class="kpiValue" style="color:{'#EF4444' if adj_profit < 0 else '#E5E7EB'};">
+          {money(adj_profit)} $
+        </div>
+      </div>
+      <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue money">{money(salary)} $</div></div>
+      <div class="kpi">
+        <div class="kpiLabel">Долг, который уйдёт дальше</div>
+        <div class="kpiValue" style="color:{'#EF4444' if debt_out < 0 else '#E5E7EB'};">
+          {money(debt_out)} $
+        </div>
+      </div>
+    </div>
+    """,
             unsafe_allow_html=True,
         )
 
@@ -636,15 +695,15 @@ if user[4] == "employee":
             st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
             st.markdown(
                 f"""
-<div class="kpiRow">
-  <div class="kpi">
-    <div class="kpiLabel">💰 Премия</div>
-    <div class="kpiValue" style="color:#FBBF24;">
-      {money(bonus)} $
+    <div class="kpiRow">
+      <div class="kpi">
+        <div class="kpiLabel">💰 Премия</div>
+        <div class="kpiValue" style="color:#FBBF24;">
+          {money(bonus)} $
+        </div>
+      </div>
     </div>
-  </div>
-</div>
-""",
+    """,
                 unsafe_allow_html=True,
             )
 
@@ -653,27 +712,29 @@ if user[4] == "employee":
         # ИТОГ
         st.markdown(
             f"""
-<div class="kpiRow">
-  <div class="kpi">
-    <div class="kpiLabel">Итого ($)</div>
-    <div class="kpiValue money">{money(total_payment)} $</div>
-  </div>
-  <div class="kpi">
-    <div class="kpiLabel">Итого (₽)</div>
-    <div class="kpiValue">{money(rub_total)} ₽</div>
-  </div>
-  <div class="kpi">
-    <div class="kpiLabel">Формула</div>
-    <div class="kpiValue" style="font-size:14px;">
-      ({money(income)} - {money(brocards)} - {money(rent)} - {money(supplies)})
+    <div class="kpiRow">
+      <div class="kpi">
+        <div class="kpiLabel">Итого ($)</div>
+        <div class="kpiValue money">{money(total_payment)} $</div>
+      </div>
+      <div class="kpi">
+        <div class="kpiLabel">Итого (₽)</div>
+        <div class="kpiValue">{money(rub_total)} ₽</div>
+      </div>
+      <div class="kpi">
+        <div class="kpiLabel">Формула недели</div>
+        <div class="kpiValue" style="font-size:14px;">
+          ({money(income)} - {money(brocards)} - {money(rent)} - {money(supplies)}) = {money(base_profit)}
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpiLabel">Формула с долгом</div>
+        <div class="kpiValue" style="font-size:14px;">
+          {money(base_profit)} + ({money(debt_in)}) = {money(adj_profit)}
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="kpi">
-    <div class="kpiLabel">= Прибыль</div>
-    <div class="kpiValue">{money(profit)} $</div>
-  </div>
-</div>
-""",
+    """,
             unsafe_allow_html=True,
         )
 
