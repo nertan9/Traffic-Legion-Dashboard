@@ -429,10 +429,7 @@ if user[4] == "admin":
 # =====================================================
 if user[4] == "employee":
 
-    st.markdown(
-        "<h1 class='title'>📄 Мои отчеты</h1>",
-        unsafe_allow_html=True
-    )
+    st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
 
     user_id = int(user[0])
     full_name = user[3]
@@ -450,9 +447,9 @@ if user[4] == "employee":
     if "selected_report" not in st.session_state:
         st.session_state["selected_report"] = None
 
-    # =====================================================
+    # =========================
     # LIST
-    # =====================================================
+    # =========================
     if st.session_state["selected_report"] is None:
 
         header_cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
@@ -468,13 +465,23 @@ if user[4] == "employee":
         for _, row in data.iterrows():
 
             start, end = get_week_range(int(row["year"]), int(row["week"]))
-            profit, salary, total = calc_total(
-                row["income"],
-                row["brocards"],
-                row["rent"],
-                row["supplies"],
-                row["bonus"],
-            )
+
+            income = float(row["income"])
+            brocards = float(row["brocards"])
+            rent = float(row["rent"])
+            supplies = float(row["supplies"])
+            bonus = float(row["bonus"])
+            percent = float(row["percent"])
+
+            profit = income - (brocards + rent + supplies)
+
+            # зарплата не может быть отрицательной
+            if profit <= 0:
+                salary = 0
+            else:
+                salary = profit * (percent / 100)
+
+            total_payment = max(salary + bonus, 0)
 
             badge = (
                 "<span class='badge badgeOpen'>Открыт</span>"
@@ -490,16 +497,16 @@ if user[4] == "employee":
                     st.rerun()
 
             cols[1].markdown(full_name)
-            cols[2].markdown(f"<span class='money'>{money(total)} $</span>", unsafe_allow_html=True)
+            cols[2].markdown(f"<span class='money'>{money(total_payment)} $</span>", unsafe_allow_html=True)
             cols[3].markdown(badge, unsafe_allow_html=True)
             cols[4].markdown(f"{start} - {end}")
             cols[5].markdown(row["created_at"] or "-")
 
             st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-    # =====================================================
+    # =========================
     # DETAIL
-    # =====================================================
+    # =========================
     else:
 
         report_id = int(st.session_state["selected_report"])
@@ -512,12 +519,18 @@ if user[4] == "employee":
         supplies = float(report["supplies"])
         bonus = float(report["bonus"])
         usd_rate = float(report["usd_rate"])
+        percent = float(report["percent"])
 
         total_expense = brocards + rent + supplies
         profit = income - total_expense
-        percent = float(report["percent"]) if "percent" in report else 30
-        salary = profit * (percent / 100)
-        total_payment = salary + bonus
+
+        # зарплата не может быть отрицательной
+        if profit <= 0:
+            salary = 0
+        else:
+            salary = profit * (percent / 100)
+
+        total_payment = max(salary + bonus, 0)
         rub_total = total_payment * usd_rate
 
         badge = (
@@ -545,14 +558,19 @@ if user[4] == "employee":
             unsafe_allow_html=True,
         )
 
-        # KPI 1
+        # KPI BLOCK 1
         st.markdown(
             f"""
 <div class="kpiRow">
   <div class="kpi"><div class="kpiLabel">Курс USD</div><div class="kpiValue">{money(usd_rate)} ₽</div></div>
   <div class="kpi"><div class="kpiLabel">Доход</div><div class="kpiValue">{money(income)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Расход</div><div class="kpiValue">{money(total_expense)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Чистая прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+  <div class="kpi">
+    <div class="kpiLabel">Чистая прибыль</div>
+    <div class="kpiValue" style="color:{'#EF4444' if profit < 0 else '#E5E7EB'};">
+      {money(profit)} $
+    </div>
+  </div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -560,14 +578,14 @@ if user[4] == "employee":
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        # KPI 2
+        # KPI BLOCK 2
         st.markdown(
             f"""
 <div class="kpiRow">
   <div class="kpi"><div class="kpiLabel">Brocards</div><div class="kpiValue">{money(brocards)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Аренда</div><div class="kpiValue">{money(rent)} $</div></div>
   <div class="kpi"><div class="kpiLabel">Расходники</div><div class="kpiValue">{money(supplies)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue">{money(salary)} $</div></div>
+  <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue money">{money(salary)} $</div></div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -596,15 +614,24 @@ if user[4] == "employee":
         st.markdown(
             f"""
 <div class="kpiRow">
-  <div class="kpi"><div class="kpiLabel">Итого ($)</div><div class="kpiValue money">{money(total_payment)} $</div></div>
-  <div class="kpi"><div class="kpiLabel">Итого (₽)</div><div class="kpiValue">{money(rub_total)} ₽</div></div>
+  <div class="kpi">
+    <div class="kpiLabel">Итого ($)</div>
+    <div class="kpiValue money">{money(total_payment)} $</div>
+  </div>
+  <div class="kpi">
+    <div class="kpiLabel">Итого (₽)</div>
+    <div class="kpiValue">{money(rub_total)} ₽</div>
+  </div>
   <div class="kpi">
     <div class="kpiLabel">Формула</div>
     <div class="kpiValue" style="font-size:14px;">
       ({money(income)} - {money(brocards)} - {money(rent)} - {money(supplies)})
     </div>
   </div>
-  <div class="kpi"><div class="kpiLabel">= Прибыль</div><div class="kpiValue">{money(profit)} $</div></div>
+  <div class="kpi">
+    <div class="kpiLabel">= Прибыль</div>
+    <div class="kpiValue">{money(profit)} $</div>
+  </div>
 </div>
 """,
             unsafe_allow_html=True,
