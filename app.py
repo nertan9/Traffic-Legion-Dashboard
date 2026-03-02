@@ -541,35 +541,33 @@ if user[4] == "admin":
         st.markdown(f"<div class='card'><b>Ваши очки:</b> {user_points}</div>", unsafe_allow_html=True)
         st.write("")
 
-        cols = st.columns(4)
+        cols = st.columns(3)
 
         for i, (_, r) in enumerate(rewards.iterrows()):
-            with cols[i % 4]:
+            with cols[i % 3]:
 
                 enough = user_points >= r["price"]
-
                 price_color = "#22C55E" if enough else "#EF4444"
 
                 st.markdown(f"""
-                <div class="shop-card">
-                    <div class="shop-img">
-                        <img src="{r['image_url']}" />
-                    </div>
+        <div class="shop-card">
+            <div class="shop-img">
+                <img src="{r['image_url']}" />
+            </div>
 
-                    <div class="shop-title">{r['name']}</div>
-                    <div class="shop-desc">{r['description']}</div>
+            <div class="shop-title">{r['name']}</div>
+            <div class="shop-desc">{r['description']}</div>
 
-                    <div class="shop-price" style="color:{price_color}">
-                        {r['price']} очков
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+            <div class="shop-price" style="color:{price_color}">
+                {r['price']} очков
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
                 if st.button(
                     "Обменять",
                     key=f"buy_{r['id']}",
-                    disabled=not enough,
-                    use_container_width=True
+                    disabled=not enough
                 ):
                     c.execute(
                         "INSERT INTO reward_orders (user_id, reward_id, created_at) VALUES (?, ?, ?)",
