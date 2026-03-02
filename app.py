@@ -233,6 +233,7 @@ button[kind="secondary"]:hover{
   max-height:120px;
   max-width:100%;
   object-fit:contain;
+  display:block;
 }
 
 .shop-title{
