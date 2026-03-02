@@ -75,7 +75,36 @@ h1,h2,h3 { letter-spacing: -0.02em; }
   border:1px solid;
   font-size: 12px;
 }
-.badgeOpen{ color: #86EFAC; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.08); }
+.badgeOpen{
+  color: #86EFAC;
+  border-color: rgba(34,197,94,.45);
+  background: rgba(34,197,94,.08);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34,197,94,.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34,197,94,0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34,197,94,0);
+  }
+}
+
+.kpi{
+  transition: all .25s ease;
+}
+
+.kpi:hover{
+  transform: translateY(-6px);
+  border-color: rgba(124,58,237,.55);
+  box-shadow: 0 12px 35px rgba(0,0,0,.35);
+  background: linear-gradient(180deg, rgba(124,58,237,.08), rgba(255,255,255,.02));
+}
+
 .badgePaid{ color: #CBD5E1; border-color: rgba(148,163,184,.35); background: rgba(148,163,184,.10); }
 
 .hr{ height:1px; background: var(--border); margin: 14px 0; }
