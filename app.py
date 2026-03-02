@@ -322,10 +322,14 @@ count = c.fetchone()[0]
 
 if count == 0:
     c.execute("""
-        INSERT INTO rewards (name, description, image_url, price)
-        VALUES 
-        ('AirPods Pro', 'Беспроводные наушники Apple', 'https://images.unsplash.com/photo-1585386959984-a4155224a1ad', 300),
-        ('MacBook Air', 'Ноутбук для работы', 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8', 1000)
+    INSERT INTO rewards (name, description, image_url, price)
+    VALUES 
+    ('AirPods Pro', 'Беспроводные наушники Apple',
+     'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?auto=format&fit=crop&w=400&q=80',
+     300),
+    ('MacBook Air', 'Ноутбук для работы',
+     'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80',
+     1000)
     """)
     conn.commit()
 
