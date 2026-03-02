@@ -328,8 +328,7 @@ if count == 0:
     """)
     conn.commit()
 
-c.execute("DELETE FROM rewards")
-c.execute("DELETE FROM reward_orders")
+
 conn.commit()
 
 # ===================== DB MIGRATION (debt columns) =====================
