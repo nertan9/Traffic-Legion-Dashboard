@@ -774,7 +774,9 @@ if user[4] == "employee":
                         </div>
                     """, unsafe_allow_html=True)
 
-        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+        if debt_in < 0 or debt_out < 0:
+            # вывод блока долга
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
         # KPI BLOCK 2 (долг + прибыль с учетом долга)
         
@@ -808,15 +810,36 @@ if user[4] == "employee":
             </div>
           </div>
 
-          <div class="kpi">
-            <div class="kpiLabel">Зарплата ({percent}%)</div>
-            <div class="kpiValue money">{money(salary)} $</div>
-          </div>
+          
         </div>
         """,
                 unsafe_allow_html=True,
             )
 
+        # =========================
+        # ЗАРПЛАТА + ПРЕМИЯ (ВСЕГДА)
+        # =========================
+        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        if bonus > 0:
+            st.markdown(
+                f"""
+        <div class="kpiRow">
+          <div class="kpi">
+            <div class="kpiLabel">Зарплата ({percent}%)</div>
+            <div class="kpiValue money">{money(salary)} $</div>
+          </div>
+
+          <div class="kpi">
+            <div class="kpiLabel">💰 Премия</div>
+            <div class="kpiValue" style="color:#FBBF24;">
+              {money(bonus)} $
+            </div>
+          </div>
+        </div>
+        """,
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 f"""
@@ -829,22 +852,7 @@ if user[4] == "employee":
         """,
                 unsafe_allow_html=True,
             )
-
-        if bonus > 0:
-            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-            st.markdown(
-                f"""
-        <div class="kpiRow">
-          <div class="kpi">
-            <div class="kpiLabel">💰 Премия</div>
-            <div class="kpiValue" style="color:#FBBF24;">
-              {money(bonus)} $
-            </div>
-          </div>
-        </div>
-        """,
-                unsafe_allow_html=True,
-            )
+        
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
