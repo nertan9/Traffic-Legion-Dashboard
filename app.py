@@ -207,24 +207,50 @@ button[kind="secondary"]:hover{
 /* ===== SHOP CARD ===== */
 
 .shop-card{
-  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  background: rgba(255,255,255,.03);
   border:1px solid var(--border);
-  border-radius:14px;
-  padding:12px;
-  transition: all .2s ease;
+  border-radius:16px;
+  padding:14px;
+  text-align:center;
+  transition: all .25s ease;
 }
 
 .shop-card:hover{
   transform: translateY(-4px);
   border-color: rgba(124,58,237,.6);
-  box-shadow: 0 10px 25px rgba(0,0,0,.35);
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
 }
 
-.price{
+.shop-img{
+  height:140px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:10px;
+}
+
+.shop-img img{
+  max-height:120px;
+  max-width:100%;
+  object-fit:contain;
+}
+
+.shop-title{
+  font-weight:700;
+  font-size:15px;
+  margin-top:4px;
+}
+
+.shop-desc{
+  font-size:12px;
+  color: var(--muted);
+  margin-top:4px;
+}
+
+.shop-price{
   font-size:16px;
   font-weight:800;
-  margin-top:6px;
-  margin-bottom:6px;
+  margin-top:8px;
 }
 
 </style>
@@ -297,10 +323,14 @@ if count == 0:
     c.execute("""
         INSERT INTO rewards (name, description, image_url, price)
         VALUES 
-        ('AirPods Pro', 'Беспроводные наушники Apple', 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MQD83?wid=572&hei=572&fmt=jpeg&qlt=95&.v=1660803972361', 300),
-        ('MacBook Air', 'Ноутбук для работы', 'https://static.joxi.pro/1772204915999-8ecbdf94-89c6-4412-879a-744ff2c65f81.jpg', 1000)
+        ('AirPods Pro', 'Беспроводные наушники Apple', 'https://images.unsplash.com/photo-1585386959984-a4155224a1ad', 300),
+        ('MacBook Air', 'Ноутбук для работы', 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8', 1000)
     """)
     conn.commit()
+
+c.execute("DELETE FROM rewards")
+c.execute("DELETE FROM reward_orders")
+conn.commit()
 
 # ===================== DB MIGRATION (debt columns) =====================
 def ensure_debt_columns():
@@ -515,23 +545,26 @@ if user[4] == "admin":
         cols = st.columns(4)
 
         for i, (_, r) in enumerate(rewards.iterrows()):
-            with cols[i % 3]:
+            with cols[i % 4]:
 
                 enough = user_points >= r["price"]
 
-                st.markdown("<div class='shop-card'>", unsafe_allow_html=True)
-
-                st.image(r["image_url"], width=140)
-
-                st.markdown(f"<div style='font-weight:700; font-size:14px'>{r['name']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='small'>{r['description']}</div>", unsafe_allow_html=True)
-
                 price_color = "#22C55E" if enough else "#EF4444"
 
-                st.markdown(
-                    f"<div class='price' style='color:{price_color}'>{r['price']} очков</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"""
+                <div class="shop-card">
+                    <div class="shop-img">
+                        <img src="{r['image_url']}" />
+                    </div>
+
+                    <div class="shop-title">{r['name']}</div>
+                    <div class="shop-desc">{r['description']}</div>
+
+                    <div class="shop-price" style="color:{price_color}">
+                        {r['price']} очков
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
                 if st.button(
                     "Обменять",
@@ -544,7 +577,7 @@ if user[4] == "admin":
                         (user[0], r["id"], datetime.now().strftime("%Y-%m-%d %H:%M"))
                     )
                     conn.commit()
-                    st.success("Запрос на получение подарка отправлен")
+                    st.success("Запрос отправлен")
 
                 st.markdown("</div>", unsafe_allow_html=True)
 
