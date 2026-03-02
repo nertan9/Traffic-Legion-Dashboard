@@ -719,78 +719,90 @@ if user[4] == "employee":
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
         # KPI BLOCK 2 (долг + прибыль с учетом долга)
-        st.markdown(
-            f"""
-    <div class="kpiRow">
-      <div class="kpi">
-        <div class="kpiLabel">Задолженность с прошлого отчёта</div>
-        <div class="kpiValue" style="color:{'#EF4444' if debt_in < 0 else '#E5E7EB'};">
-          {money(debt_in)} $
-        </div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">Прибыль с учетом долга</div>
-        <div class="kpiValue" style="color:{'#EF4444' if adj_profit < 0 else '#E5E7EB'};">
-          {money(adj_profit)} $
-        </div>
-      </div>
-      <div class="kpi"><div class="kpiLabel">Зарплата ({percent}%)</div><div class="kpiValue money">{money(salary)} $</div></div>
-      <div class="kpi">
-        <div class="kpiLabel">Долг, который уйдёт дальше</div>
-        <div class="kpiValue" style="color:{'#EF4444' if debt_out < 0 else '#E5E7EB'};">
-          {money(debt_out)} $
-        </div>
-      </div>
-    </div>
-    """,
-            unsafe_allow_html=True,
-        )
+        
 
-        # ПРЕМИЯ
+        # =========================
+        # БЛОК С ДОЛГОМ (ТОЛЬКО ЕСЛИ ОН ЕСТЬ)
+        # =========================
+        if debt_in < 0 or debt_out < 0:
+
+            st.markdown(
+                f"""
+        <div class="kpiRow">
+          <div class="kpi">
+            <div class="kpiLabel">Задолженность с прошлого отчёта</div>
+            <div class="kpiValue" style="color:{'#EF4444' if debt_in < 0 else '#E5E7EB'};">
+              {money(debt_in)} $
+            </div>
+          </div>
+
+          <div class="kpi">
+            <div class="kpiLabel">Прибыль с учетом долга</div>
+            <div class="kpiValue" style="color:{'#EF4444' if adj_profit < 0 else '#E5E7EB'};">
+              {money(adj_profit)} $
+            </div>
+          </div>
+
+          <div class="kpi">
+            <div class="kpiLabel">Долг, который уйдет дальше</div>
+            <div class="kpiValue" style="color:{'#EF4444' if debt_out < 0 else '#E5E7EB'};">
+              {money(debt_out)} $
+            </div>
+          </div>
+
+          <div class="kpi">
+            <div class="kpiLabel">Зарплата ({percent}%)</div>
+            <div class="kpiValue money">{money(salary)} $</div>
+          </div>
+        </div>
+        """,
+                unsafe_allow_html=True,
+            )
+
+        else:
+            st.markdown(
+                f"""
+        <div class="kpiRow">
+          <div class="kpi">
+            <div class="kpiLabel">Зарплата ({percent}%)</div>
+            <div class="kpiValue money">{money(salary)} $</div>
+          </div>
+        </div>
+        """,
+                unsafe_allow_html=True,
+            )
+
         if bonus > 0:
             st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
             st.markdown(
                 f"""
-    <div class="kpiRow">
-      <div class="kpi">
-        <div class="kpiLabel">💰 Премия</div>
-        <div class="kpiValue" style="color:#FBBF24;">
-          {money(bonus)} $
+        <div class="kpiRow">
+          <div class="kpi">
+            <div class="kpiLabel">💰 Премия</div>
+            <div class="kpiValue" style="color:#FBBF24;">
+              {money(bonus)} $
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-    """,
+        """,
                 unsafe_allow_html=True,
             )
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        # ИТОГ
         st.markdown(
             f"""
-    <div class="kpiRow">
-      <div class="kpi">
-        <div class="kpiLabel">Итого ($)</div>
-        <div class="kpiValue money">{money(total_payment)} $</div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">Итого (₽)</div>
-        <div class="kpiValue">{money(rub_total)} ₽</div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">Формула недели</div>
-        <div class="kpiValue" style="font-size:14px;">
-          ({money(income)} - {money(brocards)} - {money(rent)} - {money(supplies)}) = {money(base_profit)}
+        <div class="kpiRow">
+          <div class="kpi">
+            <div class="kpiLabel">Итого ($)</div>
+            <div class="kpiValue money">{money(total_payment)} $</div>
+          </div>
+          <div class="kpi">
+            <div class="kpiLabel">Итого (₽)</div>
+            <div class="kpiValue">{money(rub_total)} ₽</div>
+          </div>
         </div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">Формула с долгом</div>
-        <div class="kpiValue" style="font-size:14px;">
-          {money(base_profit)} + ({money(debt_in)}) = {money(adj_profit)}
-        </div>
-      </div>
-    </div>
-    """,
+        """,
             unsafe_allow_html=True,
         )
 
