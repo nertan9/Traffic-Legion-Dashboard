@@ -111,6 +111,31 @@ button[kind="secondary"]:hover{
   background:rgba(124,58,237,.10);
 }
 
+.section-title {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.card-small {
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.card-small .label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.card-small .value {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -715,6 +740,39 @@ if user[4] == "employee":
     """,
             unsafe_allow_html=True,
         )
+
+        if brocards > 0 or rent > 0 or supplies > 0:
+
+            st.markdown("<div class='section-title'>Структура расходов</div>", unsafe_allow_html=True)
+
+            exp_cols = st.columns(3)
+
+            with exp_cols[0]:
+                if brocards > 0:
+                    st.markdown(f"""
+                        <div class='card-small'>
+                            <div class='label'>Brocards</div>
+                            <div class='value'>{money(brocards)} $</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+            with exp_cols[1]:
+                if rent > 0:
+                    st.markdown(f"""
+                        <div class='card-small'>
+                            <div class='label'>Аренда</div>
+                            <div class='value'>{money(rent)} $</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+            with exp_cols[2]:
+                if supplies > 0:
+                    st.markdown(f"""
+                        <div class='card-small'>
+                            <div class='label'>Расходники</div>
+                            <div class='value'>{money(supplies)} $</div>
+                        </div>
+                    """, unsafe_allow_html=True)
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
