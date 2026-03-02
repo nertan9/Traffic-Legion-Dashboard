@@ -204,33 +204,50 @@ button[kind="secondary"]:hover{
   }
 }
 
-/* ===== SHOP CARD ===== */
+/* ===== SHOP CARD PRO ===== */
 
 .shop-card{
-  background: rgba(255,255,255,.03);
+  position: relative;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
   border:1px solid var(--border);
-  border-radius:16px;
-  padding:14px;
+  border-radius:18px;
+  padding:16px;
   text-align:center;
-  transition: all .25s ease;
+  transition: all .35s cubic-bezier(.22,.61,.36,1);
+  overflow:hidden;
+}
+
+.shop-card::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:-100%;
+  width:100%;
+  height:100%;
+  background:linear-gradient(120deg, transparent, rgba(124,58,237,.2), transparent);
+  transition: all .6s;
+}
+
+.shop-card:hover::before{
+  left:100%;
 }
 
 .shop-card:hover{
-  transform: translateY(-4px);
+  transform: translateY(-6px);
   border-color: rgba(124,58,237,.6);
-  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  box-shadow: 0 18px 40px rgba(0,0,0,.4);
 }
 
 .shop-img{
-  height:140px;
+  height:130px;
   display:flex;
   align-items:center;
   justify-content:center;
-  margin-bottom:10px;
+  margin-bottom:12px;
 }
 
 .shop-img img{
-  max-height:120px;
+  max-height:110px;
   max-width:100%;
   object-fit:contain;
   display:block;
@@ -238,20 +255,47 @@ button[kind="secondary"]:hover{
 
 .shop-title{
   font-weight:700;
-  font-size:15px;
-  margin-top:4px;
+  font-size:16px;
+  margin-top:6px;
 }
 
 .shop-desc{
-  font-size:12px;
+  font-size:13px;
   color: var(--muted);
   margin-top:4px;
+  min-height:36px;
 }
 
 .shop-price{
-  font-size:16px;
+  font-size:18px;
   font-weight:800;
-  margin-top:8px;
+  margin-top:10px;
+}
+
+.shop-btn{
+  margin-top:14px;
+  padding:10px 0;
+  border-radius:12px;
+  font-weight:700;
+  border:1px solid var(--border);
+  transition: all .25s ease;
+}
+
+.shop-btn-enabled{
+  background: linear-gradient(135deg, #7C3AED, #9333EA);
+  color:white;
+  border:none;
+}
+
+.shop-btn-enabled:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(124,58,237,.4);
+}
+
+.shop-btn-disabled{
+  background: rgba(255,255,255,.03);
+  color: var(--muted);
+  cursor:not-allowed;
 }
 
 </style>
@@ -553,33 +597,35 @@ if user[4] == "admin":
 
                 enough = user_points >= r["price"]
                 price_color = "#22C55E" if enough else "#EF4444"
+                btn_class = "shop-btn-enabled" if enough else "shop-btn-disabled"
 
                 st.markdown(f"""
 <div class="shop-card">
- <div class="shop-img">
-  <img src="{r['image_url']}" />
- </div>
+    <div class="shop-img">
+        <img src="{r['image_url']}" />
+    </div>
 
- <div class="shop-title">{r['name']}</div>
- <div class="shop-desc">{r['description']}</div>
+    <div class="shop-title">{r['name']}</div>
+    <div class="shop-desc">{r['description']}</div>
 
- <div class="shop-price" style="color:{price_color}">
-  {r['price']} очков
- </div>
+    <div class="shop-price" style="color:{price_color}">
+        {r['price']} очков
+    </div>
+
+    <div class="shop-btn {btn_class}">
+        {"Обменять" if enough else "Недостаточно очков"}
+    </div>
 </div>
-                """, unsafe_allow_html=True)
-
-                if st.button(
-                    "Обменять",
-                    key=f"buy_{r['id']}",
-                    disabled=not enough
-                ):
-                    c.execute(
-                        "INSERT INTO reward_orders (user_id, reward_id, created_at) VALUES (?, ?, ?)",
-                        (user[0], r["id"], datetime.now().strftime("%Y-%m-%d %H:%M"))
-                    )
-                    conn.commit()
-                    st.success("Запрос отправлен")
+""", unsafe_allow_html=True)
+                if enough:
+                    if st.button("Обменять", key=f"buy_{r['id']}", use_container_width=True):
+                        c.execute(
+                            "INSERT INTO reward_orders (user_id, reward_id, created_at) VALUES (?, ?, ?)",
+                            (user[0], r["id"], datetime.now().strftime("%Y-%m-%d %H:%M"))
+                        )
+                        conn.commit()
+                        st.success("Запрос отправлен")
+                
 
                 
 
