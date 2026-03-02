@@ -204,6 +204,29 @@ button[kind="secondary"]:hover{
   }
 }
 
+/* ===== SHOP CARD ===== */
+
+.shop-card{
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:16px;
+  transition: all .25s ease;
+}
+
+.shop-card:hover{
+  transform: translateY(-6px);
+  border-color: rgba(124,58,237,.6);
+  box-shadow: 0 15px 40px rgba(0,0,0,.4);
+}
+
+.price{
+  font-size:18px;
+  font-weight:800;
+  margin-top:10px;
+  margin-bottom:10px;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -243,7 +266,41 @@ CREATE TABLE IF NOT EXISTS salaries (
 )
 """)
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS rewards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    description TEXT,
+    image_url TEXT,
+    price INTEGER
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS reward_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    reward_id INTEGER,
+    status TEXT DEFAULT 'Ожидает',
+    created_at TEXT
+)
+""")
+
+
 conn.commit()
+
+# ===== ДОБАВЛЯЕМ ТЕСТОВЫЕ ТОВАРЫ (ВРЕМЕННО) =====
+c.execute("SELECT COUNT(*) FROM rewards")
+count = c.fetchone()[0]
+
+if count == 0:
+    c.execute("""
+        INSERT INTO rewards (name, description, image_url, price)
+        VALUES 
+        ('AirPods Pro', 'Беспроводные наушники Apple', 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MQD83?wid=572&hei=572&fmt=jpeg&qlt=95&.v=1660803972361', 300),
+        ('MacBook Air', 'Ноутбук для работы', 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-m1-2020-space-gray-gallery1?wid=4000&hei=3072&fmt=jpeg&qlt=95&.v=1604278672000', 1000)
+    """)
+    conn.commit()
 
 # ===================== DB MIGRATION (debt columns) =====================
 def ensure_debt_columns():
@@ -379,8 +436,13 @@ def calc_total(income, brocards, rent, supplies, bonus):
 
     return profit, salary, total
 
+def get_user_points(user_id):
+    return 350  # временно фиксированное число
+
 ensure_debt_columns()
 recalc_all_debts()
+
+
 
 # =====================================================
 # AUTH
@@ -421,12 +483,70 @@ if st.sidebar.button("🚪 Выйти", use_container_width=True):
 # =====================================================
 # ADMIN
 # =====================================================
-# =====================================================
-# ADMIN
-# =====================================================
+
 if user[4] == "admin":
 
-    menu = st.sidebar.radio("Навигация", ["Создать сотрудника", "Создать отчет", "Все отчеты"])
+    menu = st.sidebar.radio("Навигация", [
+    "Создать сотрудника",
+    "Создать отчет",
+    "Все отчеты",
+    "Магазин"
+    ])
+
+    # =====================================================
+    #  МАГАЗИН
+    # =====================================================
+
+    if menu == "Магазин":
+
+        st.markdown("<h1 class='title'>🎁 Магазин наград</h1><div class='subtitle'>Обмен очков на подарки</div>", unsafe_allow_html=True)
+
+        rewards = pd.read_sql("SELECT * FROM rewards", conn)
+
+        if rewards.empty:
+            st.info("Пока нет товаров")
+            st.stop()
+
+        user_points = get_user_points(user[0])
+
+        st.markdown(f"<div class='card'><b>Ваши очки:</b> {user_points}</div>", unsafe_allow_html=True)
+        st.write("")
+
+        cols = st.columns(3)
+
+        for i, (_, r) in enumerate(rewards.iterrows()):
+            with cols[i % 3]:
+
+                enough = user_points >= r["price"]
+
+                st.markdown("<div class='shop-card'>", unsafe_allow_html=True)
+
+                st.image(r["image_url"], use_column_width=True)
+
+                st.markdown(f"### {r['name']}")
+                st.markdown(f"<div class='small'>{r['description']}</div>", unsafe_allow_html=True)
+
+                price_color = "#22C55E" if enough else "#EF4444"
+
+                st.markdown(
+                    f"<div class='price' style='color:{price_color}'>{r['price']} очков</div>",
+                    unsafe_allow_html=True
+                )
+
+                if st.button(
+                    "Обменять",
+                    key=f"buy_{r['id']}",
+                    disabled=not enough,
+                    use_container_width=True
+                ):
+                    c.execute(
+                        "INSERT INTO reward_orders (user_id, reward_id, created_at) VALUES (?, ?, ?)",
+                        (user[0], r["id"], datetime.now().strftime("%Y-%m-%d %H:%M"))
+                    )
+                    conn.commit()
+                    st.success("Запрос на получение подарка отправлен")
+
+                st.markdown("</div>", unsafe_allow_html=True)
 
     # =====================================================
     # СОЗДАТЬ СОТРУДНИКА
