@@ -209,22 +209,22 @@ button[kind="secondary"]:hover{
 .shop-card{
   background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
   border:1px solid var(--border);
-  border-radius:18px;
-  padding:16px;
-  transition: all .25s ease;
+  border-radius:14px;
+  padding:12px;
+  transition: all .2s ease;
 }
 
 .shop-card:hover{
-  transform: translateY(-6px);
+  transform: translateY(-4px);
   border-color: rgba(124,58,237,.6);
-  box-shadow: 0 15px 40px rgba(0,0,0,.4);
+  box-shadow: 0 10px 25px rgba(0,0,0,.35);
 }
 
 .price{
-  font-size:18px;
+  font-size:16px;
   font-weight:800;
-  margin-top:10px;
-  margin-bottom:10px;
+  margin-top:6px;
+  margin-bottom:6px;
 }
 
 </style>
@@ -512,7 +512,7 @@ if user[4] == "admin":
         st.markdown(f"<div class='card'><b>Ваши очки:</b> {user_points}</div>", unsafe_allow_html=True)
         st.write("")
 
-        cols = st.columns(3)
+        cols = st.columns(4)
 
         for i, (_, r) in enumerate(rewards.iterrows()):
             with cols[i % 3]:
@@ -521,9 +521,9 @@ if user[4] == "admin":
 
                 st.markdown("<div class='shop-card'>", unsafe_allow_html=True)
 
-                st.image(r["image_url"], use_column_width=True)
+                st.image(r["image_url"], width=140)
 
-                st.markdown(f"### {r['name']}")
+                st.markdown(f"<div style='font-weight:700; font-size:14px'>{r['name']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='small'>{r['description']}</div>", unsafe_allow_html=True)
 
                 price_color = "#22C55E" if enough else "#EF4444"
