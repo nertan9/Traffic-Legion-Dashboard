@@ -578,7 +578,7 @@ if user[4] == "admin":
                     conn.commit()
                     st.success("Запрос отправлен")
 
-                st.markdown("</div>", unsafe_allow_html=True)
+                
 
     # =====================================================
     # СОЗДАТЬ СОТРУДНИКА
