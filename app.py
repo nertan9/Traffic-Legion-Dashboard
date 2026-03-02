@@ -164,7 +164,49 @@ def ensure_debt_columns():
         pass
     conn.commit()
 
-ensure_debt_columns()
+def recalc_all_debts():
+    users_df = pd.read_sql("SELECT id FROM users WHERE role='employee'", conn)
+
+    for _, u in users_df.iterrows():
+        user_id = int(u["id"])
+
+        reports = pd.read_sql(
+            """
+            SELECT * FROM salaries
+            WHERE user_id=?
+            ORDER BY year ASC, week ASC, id ASC
+            """,
+            conn,
+            params=(user_id,)
+        )
+
+        running_debt = 0.0
+
+        for _, r in reports.iterrows():
+            base_profit, adj_profit, salary, total, debt_out = calc_with_debt(
+                r["income"],
+                r["brocards"],
+                r["rent"],
+                r["supplies"],
+                r["bonus"],
+                r["percent"],
+                running_debt
+            )
+
+            c.execute(
+                """
+                UPDATE salaries
+                SET debt_in=?, debt_out=?
+                WHERE id=?
+                """,
+                (running_debt, debt_out, int(r["id"]))
+            )
+
+            running_debt = debt_out
+
+    conn.commit()
+
+
 
 # =====================================================
 # CREATE ADMIN
@@ -243,6 +285,9 @@ def calc_total(income, brocards, rent, supplies, bonus):
     total = salary + bonus
 
     return profit, salary, total
+
+ensure_debt_columns()
+recalc_all_debts()
 
 # =====================================================
 # AUTH
