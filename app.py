@@ -186,9 +186,16 @@ def money(x):
     return f"{round(float(x), 2):,.2f}".replace(",", " ")
 
 def calc_total(income, brocards, rent, supplies, bonus):
-    profit = float(income) - (float(brocards) + float(rent) + float(supplies))
-    salary = profit * 0.30
-    total = salary + float(bonus)
+    profit = income - (brocards + rent + supplies)
+
+    # зарплата не может быть отрицательной
+    if profit <= 0:
+        salary = 0
+    else:
+        salary = profit * 0.30
+
+    total = salary + bonus
+
     return profit, salary, total
 
 # =====================================================
