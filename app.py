@@ -1295,13 +1295,19 @@ if user[4] == "employee":
                                     if row:
                                         blob = row[0]
 
-                                        st.download_button(
-                                            label="⬇ Скачать",
-                                            data=blob,
-                                            file_name=frow["filename"],
-                                            mime=frow["mime_type"] or "application/octet-stream",
-                                            key=f"emp_open_dl_{task['id']}_{frow['id']}"
-                                        )
+                                        col1, col2 = st.columns([4,1])
+
+                                        with col1:
+                                            st.markdown(f"📄 {frow['filename']}")
+
+                                        with col2:
+                                            st.download_button(
+                                                label="⬇",
+                                                data=blob,
+                                                file_name=frow["filename"],
+                                                mime=frow["mime_type"] or "application/octet-stream",
+                                                key=f"emp_open_dl_{task['id']}_{frow['id']}"
+                                            )
 
                         # ===== Кнопка завершить =====
                         if st.button("✅ Завершить", key=f"complete_{task['id']}"):
