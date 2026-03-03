@@ -1244,12 +1244,52 @@ if user[4] == "employee":
 
                     with st.container(border=True):
 
-                        colA, colB = st.columns([4, 1])
+                        colA, colB = st.columns([4, 2])
 
                         with colA:
                             st.markdown(f"**{task['title']}**")
+
                         with colB:
-                            st.warning("Открыто")
+
+                            if task["status"] == "completed":
+                                st.markdown("""
+        <div class="badge badgePaid">Выполнено</div>
+                                """, unsafe_allow_html=True)
+                            else:
+
+                                # ===== DEADLINE BADGE =====
+                                deadline_badge = ""
+
+                                if pd.notna(task["deadline"]):
+
+                                    deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
+                                    today = datetime.now().date()
+                                    delta_days = (deadline_date.date() - today).days
+
+                                    if delta_days > 0:
+                                        deadline_badge = f"⏳ {delta_days} дн."
+                                        badge_class = "badgeOpen"
+
+                                    elif delta_days == 0:
+                                        deadline_badge = "⚠️ Сегодня"
+                                        badge_class = "badgeOpen"
+
+                                    else:
+                                        deadline_badge = f"🔴 {abs(delta_days)} дн."
+                                        badge_class = "badgePaid"
+
+                                else:
+                                    deadline_badge = "Без срока"
+                                    badge_class = "badgePaid"
+
+                                st.markdown(
+                                    f"""
+            <div class="badge {badge_class}">
+                Открыто • {deadline_badge}
+            </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
 
                         if task["description"]:
                             st.caption(task["description"])
