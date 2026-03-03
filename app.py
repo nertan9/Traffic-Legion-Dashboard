@@ -617,8 +617,8 @@ if user[4] == "admin":
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-        username = st.text_input("Логин")
         full_name = st.text_input("ФИО")
+        username = st.text_input("Логин")
         password = st.text_input("Пароль", type="password")
 
         if st.button("Создать сотрудника", use_container_width=True):
