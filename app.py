@@ -605,6 +605,80 @@ if user[4] == "admin":
     ])
 
     # =====================================================
+    # СОЗДАТЬ СОТРУДНИКА
+    # =====================================================
+    if menu == "Создать сотрудника":
+
+        st.markdown(
+        "<h1 class='title'>👤 Новый сотрудник</h1>"
+        "<div class='subtitle'>Создание учетной записи сотрудника</div>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+        username = st.text_input("Логин")
+        full_name = st.text_input("ФИО")
+        password = st.text_input("Пароль", type="password")
+
+        if st.button("Создать сотрудника", use_container_width=True):
+
+            if not username or not password or not full_name:
+                st.warning("Заполните все поля")
+            else:
+                try:
+                    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+
+                    c.execute("""
+                        INSERT INTO users (username, password, full_name, role)
+                        VALUES (?, ?, ?, ?)
+                    """, (
+                        username,
+                        hashed,
+                        full_name,
+                        "employee"
+                    ))
+
+                    conn.commit()
+                    st.success("Сотрудник создан")
+
+                except sqlite3.IntegrityError:
+                    t.error("Пользователь с таким логином уже существует")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.write("")
+
+        # =========================
+        # СПИСОК СОТРУДНИКОВ
+        # =========================
+
+        employees = pd.read_sql(
+            "SELECT id, username, full_name FROM users WHERE role='employee'",
+            conn
+        )
+
+        if employees.empty:
+            st.info("Пока нет сотрудников")
+        else:
+            st.markdown("### 📋 Список сотрудников")
+
+            for _, emp in employees.iterrows():
+
+                col1, col2, col3 = st.columns([1, 3, 1])
+
+                col1.markdown(f"**#{emp['id']}**")
+                col2.markdown(f"{emp['full_name']}  \n<span class='small'>{emp['username']}</span>", unsafe_allow_html=True)
+
+                if col3.button("🗑", key=f"del_emp_{emp['id']}"):
+                    c.execute("DELETE FROM users WHERE id=?", (int(emp["id"]),))
+                    conn.commit()
+                    st.success("Сотрудник удалён")
+                    st.rerun()
+
+                st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+    # =====================================================
     #  МАГАЗИН
     # =====================================================
 
