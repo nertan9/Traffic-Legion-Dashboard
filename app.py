@@ -1049,31 +1049,38 @@ if user[4] == "admin":
 
 if user[4] == "employee":
 
+    employee_menu = st.sidebar.radio("Навигация", [
+    "Мои задания",
+    "Мои отчеты"
+    ])
+
     # =====================================================
     # ЗАДАНИЯ СОТРУДНИКА
     # =====================================================
 
-    st.markdown("<h1 class='title'>📝 Мои задания</h1>", unsafe_allow_html=True)
+    if employee_menu == "Мои задания":
 
-    user_id = int(user[0])
+        st.markdown("<h1 class='title'>📝 Мои задания</h1>", unsafe_allow_html=True)
 
-    tasks = pd.read_sql("""
-        SELECT *
-        FROM tasks
-        WHERE assigned_to=?
-        ORDER BY created_at DESC
-    """, conn, params=(user_id,))
+        user_id = int(user[0])
 
-    if tasks.empty:
-        st.info("У вас пока нет заданий")
-    else:
-        for _, task in tasks.iterrows():
+        tasks = pd.read_sql("""
+            SELECT *
+            FROM tasks
+            WHERE assigned_to=?
+            ORDER BY created_at DESC
+        """, conn, params=(user_id,))
 
-            is_completed = task["status"] == "completed"
-            status_color = "#22C55E" if is_completed else "#F59E0B"
-            status_label = "Выполнено" if is_completed else "Открыто"
+        if tasks.empty:
+            st.info("У вас пока нет заданий")
+        else:
+            for _, task in tasks.iterrows():
 
-            st.markdown(f"""
+                is_completed = task["status"] == "completed"
+                status_color = "#22C55E" if is_completed else "#F59E0B"
+                status_label = "Выполнено" if is_completed else "Открыто"
+
+                st.markdown(f"""
         <div class="card">
             <div style="display:flex; justify-content:space-between;">
                 <div>
@@ -1088,162 +1095,163 @@ if user[4] == "employee":
                 </div>
             </div>
         </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-            # 🔽 ФАЙЛЫ К ЗАДАНИЮ
-            files_df = pd.read_sql(
-                "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
-                conn,
-                params=(int(task["id"]),)
-            )
+                # 🔽 ФАЙЛЫ К ЗАДАНИЮ
+                files_df = pd.read_sql(
+                    "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                    conn,
+                    params=(int(task["id"]),)
+                )
 
-            if not files_df.empty:
-                for _, frow in files_df.iterrows():
+                if not files_df.empty:
+                    for _, frow in files_df.iterrows():
 
-                    c.execute(
-                        "SELECT content FROM task_files WHERE id=?",
-                        (int(frow["id"]),)
-                    )
-                    blob = c.fetchone()[0]
+                        c.execute(
+                            "SELECT content FROM task_files WHERE id=?",
+                            (int(frow["id"]),)
+                        )
+                        blob = c.fetchone()[0]
 
-                    st.download_button(
-                        label=f"⬇️ {frow['filename']}",
-                        data=blob,
-                        file_name=frow["filename"],
-                        mime=frow["mime_type"] or "application/octet-stream",
-                        key=f"emp_dl_{task['id']}_{frow['id']}"
-                    )
+                        st.download_button(
+                            label=f"⬇️ {frow['filename']}",
+                            data=blob,
+                            file_name=frow["filename"],
+                            mime=frow["mime_type"] or "application/octet-stream",
+                            key=f"emp_dl_{task['id']}_{frow['id']}"
+                        )
 
-            # 🔘 КНОПКА ВЫПОЛНЕНО
-            if not is_completed:
-                if st.button("✅ Отметить выполнено", key=f"complete_{task['id']}"):
-                    c.execute("""
-                        UPDATE tasks
-                        SET status='completed',
-                            completed_at=?
-                        WHERE id=?
-                    """, (
-                        datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        int(task["id"])
-                    ))
-                    conn.commit()
-                    st.success("Задание отмечено выполненным")
-                    st.rerun()
+                # 🔘 КНОПКА ВЫПОЛНЕНО
+                if not is_completed:
+                    if st.button("✅ Отметить выполнено", key=f"complete_{task['id']}"):
+                        c.execute("""
+                            UPDATE tasks
+                            SET status='completed',
+                                completed_at=?
+                            WHERE id=?
+                        """, (
+                            datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            int(task["id"])
+                        ))
+                        conn.commit()
+                        st.success("Задание отмечено выполненным")
+                        st.rerun()
 
-            st.write("")
+                st.write("")
 
-    st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
+    if employee_menu == "Мои отчеты":
+        st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
 
-    user_id = int(user[0])
-    full_name = user[3]
+        user_id = int(user[0])
+        full_name = user[3]
 
-    data = pd.read_sql(
-        "SELECT * FROM salaries WHERE user_id=? ORDER BY id DESC",
-        conn,
-        params=(user_id,)
-    )
+        data = pd.read_sql(
+            "SELECT * FROM salaries WHERE user_id=? ORDER BY id DESC",
+            conn,
+            params=(user_id,)
+        )
 
-    if data.empty:
-        st.info("Пока нет отчетов")
-        st.stop()
+        if data.empty:
+            st.info("Пока нет отчетов")
+            st.stop()
 
-    if "selected_report" not in st.session_state:
-        st.session_state["selected_report"] = None
+        if "selected_report" not in st.session_state:
+            st.session_state["selected_report"] = None
 
-    # =========================
-    # LIST
-    # =========================
-    if st.session_state["selected_report"] is None:
+        # =========================
+        # LIST
+        # =========================
+        if st.session_state["selected_report"] is None:
 
-        header_cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
-        header_cols[0].markdown("<span class='small'>ID</span>", unsafe_allow_html=True)
-        header_cols[1].markdown("<span class='small'>Сотрудник</span>", unsafe_allow_html=True)
-        header_cols[2].markdown("<span class='small'>Выплата</span>", unsafe_allow_html=True)
-        header_cols[3].markdown("<span class='small'>Статус</span>", unsafe_allow_html=True)
-        header_cols[4].markdown("<span class='small'>Период</span>", unsafe_allow_html=True)
-        header_cols[5].markdown("<span class='small'>Создан</span>", unsafe_allow_html=True)
+            header_cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
+            header_cols[0].markdown("<span class='small'>ID</span>", unsafe_allow_html=True)
+            header_cols[1].markdown("<span class='small'>Сотрудник</span>", unsafe_allow_html=True)
+            header_cols[2].markdown("<span class='small'>Выплата</span>", unsafe_allow_html=True)
+            header_cols[3].markdown("<span class='small'>Статус</span>", unsafe_allow_html=True)
+            header_cols[4].markdown("<span class='small'>Период</span>", unsafe_allow_html=True)
+            header_cols[5].markdown("<span class='small'>Создан</span>", unsafe_allow_html=True)
 
-        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        for _, row in data.iterrows():
+            for _, row in data.iterrows():
 
-            start, end = get_week_range(int(row["year"]), int(row["week"]))
+                start, end = get_week_range(int(row["year"]), int(row["week"]))
 
-            income = float(row["income"])
-            brocards = float(row["brocards"])
-            rent = float(row["rent"])
-            supplies = float(row["supplies"])
-            bonus = float(row["bonus"])
-            percent = float(row["percent"])
+                income = float(row["income"])
+                brocards = float(row["brocards"])
+                rent = float(row["rent"])
+                supplies = float(row["supplies"])
+                bonus = float(row["bonus"])
+                percent = float(row["percent"])
+
+                # ✅ долг из прошлого отчёта (0 или отрицательный)
+                debt_in = float(row["debt_in"]) if "debt_in" in row and row["debt_in"] is not None else 0.0
+
+                # ✅ расчёт с учётом долга (минус вычитается из ПРИБЫЛИ)
+                base_profit, adj_profit, salary, total_payment, debt_out = calc_with_debt(
+                    income, brocards, rent, supplies, bonus, percent, debt_in
+                )
+
+                badge = (
+                    "<span class='badge badgeOpen'>Открыт</span>"
+                    if row["status"] == "Открыт"
+                    else "<span class='badge badgePaid'>Выплачен</span>"
+                )
+
+                cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
+
+                with cols[0]:
+                    if st.button(str(int(row["id"])), key=f"row_{int(row['id'])}"):
+                        st.session_state["selected_report"] = int(row["id"])
+                        st.rerun()
+
+                cols[1].markdown(full_name)
+                cols[2].markdown(f"<span class='money'>{money(total_payment)} $</span>", unsafe_allow_html=True)
+                cols[3].markdown(badge, unsafe_allow_html=True)
+                cols[4].markdown(f"{start} - {end}")
+                cols[5].markdown(row["created_at"] or "-")
+
+                st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+        # =========================
+        # DETAIL
+        # =========================
+        else:
+
+            report_id = int(st.session_state["selected_report"])
+            report = data[data["id"] == report_id].iloc[0]
+            start, end = get_week_range(int(report["year"]), int(report["week"]))
+
+            income = float(report["income"])
+            brocards = float(report["brocards"])
+            rent = float(report["rent"])
+            supplies = float(report["supplies"])
+            bonus = float(report["bonus"])
+            usd_rate = float(report["usd_rate"])
+            percent = float(report["percent"])
 
             # ✅ долг из прошлого отчёта (0 или отрицательный)
-            debt_in = float(row["debt_in"]) if "debt_in" in row and row["debt_in"] is not None else 0.0
+            debt_in = float(report["debt_in"]) if "debt_in" in report and report["debt_in"] is not None else 0.0
 
-            # ✅ расчёт с учётом долга (минус вычитается из ПРИБЫЛИ)
+            # ✅ единый расчёт: минус вычитается из ПРИБЫЛИ недели
             base_profit, adj_profit, salary, total_payment, debt_out = calc_with_debt(
                 income, brocards, rent, supplies, bonus, percent, debt_in
             )
 
+            total_expense = brocards + rent + supplies
+            rub_total = total_payment * usd_rate
+
             badge = (
                 "<span class='badge badgeOpen'>Открыт</span>"
-                if row["status"] == "Открыт"
+                if report["status"] == "Открыт"
                 else "<span class='badge badgePaid'>Выплачен</span>"
             )
 
-            cols = st.columns([0.6, 1.5, 1, 1, 1.6, 1.3])
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-            with cols[0]:
-                if st.button(str(int(row["id"])), key=f"row_{int(row['id'])}"):
-                    st.session_state["selected_report"] = int(row["id"])
-                    st.rerun()
-
-            cols[1].markdown(full_name)
-            cols[2].markdown(f"<span class='money'>{money(total_payment)} $</span>", unsafe_allow_html=True)
-            cols[3].markdown(badge, unsafe_allow_html=True)
-            cols[4].markdown(f"{start} - {end}")
-            cols[5].markdown(row["created_at"] or "-")
-
-            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-
-    # =========================
-    # DETAIL
-    # =========================
-    else:
-
-        report_id = int(st.session_state["selected_report"])
-        report = data[data["id"] == report_id].iloc[0]
-        start, end = get_week_range(int(report["year"]), int(report["week"]))
-
-        income = float(report["income"])
-        brocards = float(report["brocards"])
-        rent = float(report["rent"])
-        supplies = float(report["supplies"])
-        bonus = float(report["bonus"])
-        usd_rate = float(report["usd_rate"])
-        percent = float(report["percent"])
-
-        # ✅ долг из прошлого отчёта (0 или отрицательный)
-        debt_in = float(report["debt_in"]) if "debt_in" in report and report["debt_in"] is not None else 0.0
-
-        # ✅ единый расчёт: минус вычитается из ПРИБЫЛИ недели
-        base_profit, adj_profit, salary, total_payment, debt_out = calc_with_debt(
-            income, brocards, rent, supplies, bonus, percent, debt_in
-        )
-
-        total_expense = brocards + rent + supplies
-        rub_total = total_payment * usd_rate
-
-        badge = (
-            "<span class='badge badgeOpen'>Открыт</span>"
-            if report["status"] == "Открыт"
-            else "<span class='badge badgePaid'>Выплачен</span>"
-        )
-
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-
-        # HEADER
-        st.markdown(
-            f"""
+            # HEADER
+            st.markdown(
+                f"""
     <div class="cardHeader">
       <div>
         <div style="font-size:18px; font-weight:800;">
@@ -1255,12 +1263,12 @@ if user[4] == "employee":
     </div>
     <div class="hr"></div>
     """,
-            unsafe_allow_html=True,
-        )
+                unsafe_allow_html=True,
+            )
 
-        # KPI BLOCK 1
-        st.markdown(
-            f"""
+            # KPI BLOCK 1
+            st.markdown(
+                f"""
     <div class="kpiRow">
       <div class="kpi"><div class="kpiLabel">Курс USD</div><div class="kpiValue">{money(usd_rate)} ₽</div></div>
       <div class="kpi"><div class="kpiLabel">Доход</div><div class="kpiValue">{money(income)} $</div></div>
@@ -1273,56 +1281,56 @@ if user[4] == "employee":
       </div>
     </div>
     """,
-            unsafe_allow_html=True,
-        )
+                unsafe_allow_html=True,
+            )
 
-        if brocards > 0 or rent > 0 or supplies > 0:
+            if brocards > 0 or rent > 0 or supplies > 0:
 
-            st.markdown("<div class='section-title'>Структура расходов</div>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>Структура расходов</div>", unsafe_allow_html=True)
 
-            exp_cols = st.columns(3)
+                exp_cols = st.columns(3)
 
-            with exp_cols[0]:
-                if brocards > 0:
-                    st.markdown(f"""
+                with exp_cols[0]:
+                    if brocards > 0:
+                        st.markdown(f"""
                         <div class='card-small'>
                             <div class='label'>Brocards</div>
                             <div class='value'>{money(brocards)} $</div>
                         </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-            with exp_cols[1]:
-                if rent > 0:
-                    st.markdown(f"""
+                with exp_cols[1]:
+                    if rent > 0:
+                        st.markdown(f"""
                         <div class='card-small'>
                             <div class='label'>Аренда</div>
                             <div class='value'>{money(rent)} $</div>
                         </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-            with exp_cols[2]:
-                if supplies > 0:
-                    st.markdown(f"""
+                with exp_cols[2]:
+                    if supplies > 0:
+                        st.markdown(f"""
                         <div class='card-small'>
                             <div class='label'>Расходники</div>
                             <div class='value'>{money(supplies)} $</div>
                         </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-        if debt_in < 0 or debt_out < 0:
-            # вывод блока долга
-            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            if debt_in < 0 or debt_out < 0:
+                # вывод блока долга
+                st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        # KPI BLOCK 2 (долг + прибыль с учетом долга)
+            # KPI BLOCK 2 (долг + прибыль с учетом долга)
         
 
-        # =========================
-        # БЛОК С ДОЛГОМ (ТОЛЬКО ЕСЛИ ОН ЕСТЬ)
-        # =========================
-        if debt_in < 0 or debt_out < 0:
+            # =========================
+            # БЛОК С ДОЛГОМ (ТОЛЬКО ЕСЛИ ОН ЕСТЬ)
+            # =========================
+            if debt_in < 0 or debt_out < 0:
 
-            st.markdown(
-                f"""
+                st.markdown(
+                    f"""
         <div class="kpiRow">
           <div class="kpi">
             <div class="kpiLabel">Задолженность с прошлого отчёта</div>
@@ -1348,17 +1356,17 @@ if user[4] == "employee":
           
         </div>
         """,
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
 
-        # =========================
-        # ЗАРПЛАТА + ПРЕМИЯ (ВСЕГДА)
-        # =========================
-        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            # =========================
+            # ЗАРПЛАТА + ПРЕМИЯ (ВСЕГДА)
+            # =========================
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        if bonus > 0:
-            st.markdown(
-                f"""
+            if bonus > 0:
+                st.markdown(
+                    f"""
         <div class="kpiRow">
           <div class="kpi">
             <div class="kpiLabel">Зарплата ({percent}%)</div>
@@ -1373,11 +1381,11 @@ if user[4] == "employee":
           </div>
         </div>
         """,
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f"""
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f"""
         <div class="kpiRow">
           <div class="kpi">
             <div class="kpiLabel">Зарплата ({percent}%)</div>
@@ -1385,14 +1393,14 @@ if user[4] == "employee":
           </div>
         </div>
         """,
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
         
 
-        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
+            st.markdown(
+                f"""
         <div class="kpiRow">
           <div class="kpi">
             <div class="kpiLabel">Итого ($)</div>
@@ -1404,12 +1412,12 @@ if user[4] == "employee":
           </div>
         </div>
         """,
-            unsafe_allow_html=True,
-        )
+                unsafe_allow_html=True,
+            )
 
-        st.write("")
-        if st.button("← Назад к списку", use_container_width=True):
-            st.session_state["selected_report"] = None
-            st.rerun()
+            st.write("")
+            if st.button("← Назад к списку", use_container_width=True):
+                st.session_state["selected_report"] = None
+                st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
