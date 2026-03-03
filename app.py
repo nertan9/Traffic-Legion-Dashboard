@@ -1045,7 +1045,92 @@ if user[4] == "admin":
 # =====================================================
 # EMPLOYEE
 # =====================================================
+
+
 if user[4] == "employee":
+
+    # =====================================================
+    # ЗАДАНИЯ СОТРУДНИКА
+    # =====================================================
+
+    st.markdown("<h1 class='title'>📝 Мои задания</h1>", unsafe_allow_html=True)
+
+    user_id = int(user[0])
+
+    tasks = pd.read_sql("""
+        SELECT *
+        FROM tasks
+        WHERE assigned_to=?
+        ORDER BY created_at DESC
+    """, conn, params=(user_id,))
+
+    if tasks.empty:
+        st.info("У вас пока нет заданий")
+    else:
+        for _, task in tasks.iterrows():
+
+            is_completed = task["status"] == "completed"
+            status_color = "#22C55E" if is_completed else "#F59E0B"
+            status_label = "Выполнено" if is_completed else "Открыто"
+
+            st.markdown(f"""
+        <div class="card">
+            <div style="display:flex; justify-content:space-between;">
+                <div>
+                    <div style="font-weight:700; font-size:16px;">
+                        {task['title']}
+                    </div>
+                    <div class="small">{task['description']}</div>
+                    <div class="small">Создано: {task['created_at']}</div>
+                </div>
+                <div style="color:{status_color}; font-weight:700;">
+                    {status_label}
+                </div>
+            </div>
+        </div>
+            """, unsafe_allow_html=True)
+
+            # 🔽 ФАЙЛЫ К ЗАДАНИЮ
+            files_df = pd.read_sql(
+                "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                conn,
+                params=(int(task["id"]),)
+            )
+
+            if not files_df.empty:
+                for _, frow in files_df.iterrows():
+
+                    c.execute(
+                        "SELECT content FROM task_files WHERE id=?",
+                        (int(frow["id"]),)
+                    )
+                    blob = c.fetchone()[0]
+
+                    st.download_button(
+                        label=f"⬇️ {frow['filename']}",
+                        data=blob,
+                        file_name=frow["filename"],
+                        mime=frow["mime_type"] or "application/octet-stream",
+                        key=f"emp_dl_{task['id']}_{frow['id']}"
+                    )
+
+            # 🔘 КНОПКА ВЫПОЛНЕНО
+            if not is_completed:
+                if st.button("✅ Отметить выполнено", key=f"complete_{task['id']}"):
+                    c.execute("""
+                        UPDATE tasks
+                        SET status='completed',
+                            completed_at=?
+                        WHERE id=?
+                    """, (
+                        datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        int(task["id"])
+                    ))
+                    conn.commit()
+                    st.success("Задание отмечено выполненным")
+                    st.rerun()
+
+            st.write("")
 
     st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
 
