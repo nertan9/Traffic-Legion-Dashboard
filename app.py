@@ -1224,7 +1224,6 @@ if user[4] == "employee":
             st.info("У вас пока нет заданий")
             st.stop()
 
-        # Разделяем
         open_tasks = tasks[tasks["status"] != "completed"]
         done_tasks = tasks[tasks["status"] == "completed"]
 
@@ -1244,125 +1243,111 @@ if user[4] == "employee":
 
                 with cols[i % 3]:
 
-                    # ===== ВЫЧИСЛЯЕМ ПРОСРОЧКУ =====
-                    is_overdue = False
-                    delta_days = None
+                    with st.container(border=True):
 
-                    if pd.notna(task["deadline"]) and task["status"] != "completed":
-                        deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
-                        today = datetime.now().date()
-                        delta_days = (deadline_date.date() - today).days
+                        # ===== DEADLINE LOGIC =====
+                        delta_days = None
+                        is_overdue = False
 
-                        if delta_days < 0:
-                            is_overdue = True
+                        if pd.notna(task["deadline"]):
+                            deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
+                            today = datetime.now().date()
+                            delta_days = (deadline_date.date() - today).days
 
-                    card_class = "task-card task-overdue" if is_overdue else "task-card"
+                            if delta_days < 0:
+                                is_overdue = True
 
-                    # ===== ОТКРЫВАЕМ КАРТОЧКУ =====
-                    st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
+                        # ===== HEADER =====
+                        colA, colB = st.columns([4, 2])
 
-                    # ===== HEADER =====
-                    colA, colB = st.columns([4, 2])
+                        with colA:
+                            st.markdown(f"**{task['title']}**")
 
-                    with colA:
-                        st.markdown(f"<div class='task-title'>{task['title']}</div>", unsafe_allow_html=True)
-
-                    with colB:
-
-                        if task["status"] == "completed":
-                            badge_html = '<div class="badge badgePaid">Выполнено</div>'
-
-                        else:
+                        with colB:
 
                             if pd.notna(task["deadline"]):
 
                                 if delta_days > 0:
-                                    badge_html = f"""
-                            <div class="badge badgeOpen">
-                                Открыто • ⏳ {delta_days} дн.
-                            </div>
-                                    """
+                                    st.markdown(f"""
+                                    <div class="badge badgeOpen">
+                                        Открыто • ⏳ {delta_days} дн.
+                                    </div>
+                                    """, unsafe_allow_html=True)
 
                                 elif delta_days == 0:
-                                    badge_html = """
-                            <div class="badge badgeOpen">
-                                Открыто • ⚠️ Сегодня
-                            </div>
-                                    """
+                                    st.markdown("""
+                                    <div class="badge badgeOpen">
+                                        Открыто • ⚠️ Сегодня
+                                    </div>
+                                    """, unsafe_allow_html=True)
 
                                 else:
-                                    badge_html = f"""
-                            <div class="badge" style="
-                                color:#FCA5A5;
-                                border-color: rgba(239,68,68,.6);
-                                background: rgba(239,68,68,.12);
-                            ">
-                                🔴 Просрочено • {abs(delta_days)} дн.
-                            </div>
-                                    """
+                                    st.markdown(f"""
+                                    <div class="badge" style="
+                                        color:#FCA5A5;
+                                        border-color: rgba(239,68,68,.6);
+                                        background: rgba(239,68,68,.12);
+                                    ">
+                                        🔴 Просрочено • {abs(delta_days)} дн.
+                                    </div>
+                                    """, unsafe_allow_html=True)
                             else:
-                                badge_html = '<div class="badge badgePaid">Открыто</div>'
+                                st.markdown('<div class="badge badgePaid">Открыто</div>', unsafe_allow_html=True)
 
-                        st.markdown(badge_html, unsafe_allow_html=True)
+                        # ===== DESCRIPTION =====
+                        if task["description"]:
+                            st.caption(task["description"])
 
-                    # ===== ОПИСАНИЕ =====
-                    if task["description"]:
-                        st.markdown(f"<div class='task-desc'>{task['description']}</div>", unsafe_allow_html=True)
+                        st.caption(f"Создано: {task['created_at']}")
 
-                    # ===== ДАТА СОЗДАНИЯ =====
-                    st.markdown(f"<div class='task-date'>Создано: {task['created_at']}</div>", unsafe_allow_html=True)
+                        # ===== ATTACHMENTS =====
+                        files_df = pd.read_sql(
+                            "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                            conn,
+                            params=(int(task["id"]),)
+                        )
 
-                    # ===== ВЛОЖЕНИЯ =====
-                    files_df = pd.read_sql(
-                        "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
-                        conn,
-                        params=(int(task["id"]),)
-                    )
+                        if not files_df.empty:
+                            with st.expander(f"📎 Вложения ({len(files_df)})"):
 
-                    if not files_df.empty:
-                        with st.expander(f"📎 Вложения ({len(files_df)})"):
+                                for _, frow in files_df.iterrows():
 
-                            for _, frow in files_df.iterrows():
+                                    c.execute(
+                                        "SELECT content FROM task_files WHERE id=?",
+                                        (int(frow["id"]),)
+                                    )
+                                    row = c.fetchone()
 
-                                c.execute(
-                                    "SELECT content FROM task_files WHERE id=?",
-                                    (int(frow["id"]),)
-                                )
-                                row = c.fetchone()
+                                    if row:
+                                        blob = row[0]
 
-                                if row:
-                                    blob = row[0]
+                                        col1, col2 = st.columns([4,1])
 
-                                    col1, col2 = st.columns([4,1])
+                                        with col1:
+                                            st.markdown(f"📄 {frow['filename']}")
 
-                                    with col1:
-                                        st.markdown(f"📄 {frow['filename']}")
+                                        with col2:
+                                            st.download_button(
+                                                label="⬇",
+                                                data=blob,
+                                                file_name=frow["filename"],
+                                                mime=frow["mime_type"] or "application/octet-stream",
+                                                key=f"emp_open_dl_{task['id']}_{frow['id']}"
+                                            )
 
-                                    with col2:
-                                        st.download_button(
-                                            label="⬇",
-                                            data=blob,
-                                            file_name=frow["filename"],
-                                            mime=frow["mime_type"] or "application/octet-stream",
-                                            key=f"emp_open_dl_{task['id']}_{frow['id']}"
-                                        )
-
-                    # ===== КНОПКА =====
-                    if st.button("✅ Завершить", key=f"complete_{task['id']}"):
-                        c.execute("""
-                            UPDATE tasks
-                            SET status='completed',
-                                completed_at=?
-                            WHERE id=?
-                        """, (
-                            datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            int(task["id"])
-                        ))
-                        conn.commit()
-                        st.rerun()
-
-                    # ===== ЗАКРЫВАЕМ КАРТОЧКУ =====
-                    st.markdown("</div>", unsafe_allow_html=True)
+                        # ===== COMPLETE BUTTON =====
+                        if st.button("✅ Завершить", key=f"complete_{task['id']}"):
+                            c.execute("""
+                                UPDATE tasks
+                                SET status='completed',
+                                    completed_at=?
+                                WHERE id=?
+                            """, (
+                                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                int(task["id"])
+                            ))
+                            conn.commit()
+                            st.rerun()
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
@@ -1384,19 +1369,22 @@ if user[4] == "employee":
 
                         with st.container(border=True):
 
-                            colA, colB = st.columns([4, 1])
+                            colA, colB = st.columns([4, 2])
 
                             with colA:
                                 st.markdown(f"**{task['title']}**")
+
                             with colB:
-                                st.success("Выполнено")
+                                st.markdown('<div class="badge badgePaid">Выполнено</div>', unsafe_allow_html=True)
 
                             if task["description"]:
                                 st.caption(task["description"])
 
-                            st.caption(task["created_at"])
+                            st.caption(f"Создано: {task['created_at']}")
 
-                            # Вложения
+                            if pd.notna(task["deadline"]):
+                                st.caption(f"Дедлайн: {task['deadline']}")
+
                             files_df = pd.read_sql(
                                 "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
                                 conn,
@@ -1418,7 +1406,7 @@ if user[4] == "employee":
                                             blob = row[0]
 
                                             st.download_button(
-                                                label="⬇ Скачать",
+                                                label=f"⬇ {frow['filename']}",
                                                 data=blob,
                                                 file_name=frow["filename"],
                                                 mime=frow["mime_type"] or "application/octet-stream",
