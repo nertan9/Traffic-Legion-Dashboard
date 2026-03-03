@@ -375,6 +375,20 @@ CREATE TABLE IF NOT EXISTS tasks (
 )
 """)
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS task_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    mime_type TEXT,
+    size_bytes INTEGER,
+    content BLOB NOT NULL,
+    uploaded_by INTEGER,
+    uploaded_at TEXT
+)
+""")
+
+
 
 conn.commit()
 
@@ -669,51 +683,100 @@ if user[4] == "admin":
             unsafe_allow_html=True
         )
 
+        # =========================
+        # СОЗДАНИЕ ЗАДАНИЯ
+        # =========================
+
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-        # ===== СОЗДАНИЕ ЗАДАНИЯ =====
         employees = pd.read_sql(
             "SELECT id, full_name FROM users WHERE role='employee'",
             conn
         )
 
-        if not employees.empty:
+        if employees.empty:
+            st.info("Нет сотрудников")
+        else:
 
             title = st.text_input("Название задания")
             description = st.text_area("Описание")
 
-            emp_name = st.selectbox("Назначить сотруднику", employees["full_name"])
+            emp_name = st.selectbox(
+                "Назначить сотруднику",
+                employees["full_name"]
+            )
+
             assigned_id = int(
-                employees.loc[employees["full_name"] == emp_name, "id"].values[0]
+                employees.loc[
+                    employees["full_name"] == emp_name, "id"
+                ].values[0]
+            )
+
+            uploaded_files = st.file_uploader(
+                "Файлы к заданию",
+                accept_multiple_files=True
             )
 
             if st.button("Создать задание", use_container_width=True):
-                if not title:
-                    st.warning("Введите название")
-                else:
-                    c.execute("""
-                        INSERT INTO tasks
-                        (title, description, assigned_to, created_by, created_at)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (
-                        title,
-                        description,
-                        assigned_id,
-                        user[0],
-                        datetime.now().strftime("%Y-%m-%d %H:%M")
-                    ))
-                    conn.commit()
-                    st.success("Задание создано")
-                    st.rerun()
 
-        else:
-            st.info("Нет сотрудников")
+                if not title:
+                    st.warning("Введите название задания")
+                else:
+
+                    created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+                    try:
+                        # 1️⃣ Создаем задачу
+                        c.execute("""
+                            INSERT INTO tasks
+                            (title, description, assigned_to, created_by, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (
+                            title,
+                            description,
+                            assigned_id,
+                            user[0],
+                            created_at
+                        ))
+
+                        task_id = c.lastrowid  # ← получаем ID новой задачи
+
+                        # 2️⃣ Сохраняем файлы (если есть)
+                    i    f uploaded_files:
+                            for f in uploaded_files:
+
+                                content = f.getvalue()
+
+                                c.execute("""
+                                    INSERT INTO task_files
+                                    (task_id, filename, mime_type, size_bytes, content, uploaded_by, uploaded_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                """, (
+                                    task_id,
+                                    f.name,
+                                    f.type,
+                                    len(content),
+                                    content,
+                                    user[0],
+                                    created_at
+                                ))
+
+                        conn.commit()
+                        st.success("Задание создано")
+                        st.rerun()
+
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Ошибка при создании задания: {e}")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.write("")
 
-        # ===== СПИСОК ЗАДАНИЙ =====
+        # =========================
+        # СПИСОК ЗАДАНИЙ
+        # =========================
+
         tasks = pd.read_sql("""
             SELECT t.*, u.full_name
             FROM tasks t
@@ -723,60 +786,56 @@ if user[4] == "admin":
 
         if tasks.empty:
             st.info("Пока нет заданий")
-            st.stop()
+        else:
 
-        for _, task in tasks.iterrows():
+            for _, task in tasks.iterrows():
 
-            status_color = "#22C55E" if task["status"] == "completed" else "#F59E0B"
-            status_label = "Выполнено" if task["status"] == "completed" else "Открыто"
+                status_color = "#22C55E" if task["status"] == "completed" else "#F59E0B"
+                status_label = "Выполнено" if task["status"] == "completed" else "Открыто"
 
-            st.markdown(f"""
-        <div class="card">
-            <div style="display:flex; justify-content:space-between;">
-                <div>
-                    <div style="font-weight:700; font-size:16px;">
-                        {task['title']}
+                st.markdown(f"""
+            <div class="card">
+                <div style="display:flex; justify-content:space-between;">
+                    <div>
+                        <div style="font-weight:700; font-size:16px;">
+                            {task['title']}
+                        </div>
+                        <div class="small">{task['description']}</div>
+                        <div class="small">Сотрудник: {task['full_name']}</div>
+                        <div class="small">Создано: {task['created_at']}</div>
                     </div>
-                    <div class="small">{task['description']}</div>
-                    <div class="small">Сотрудник: {task['full_name']}</div>
-                    <div class="small">Создано: {task['created_at']}</div>
-                </div>
-                <div style="color:{status_color}; font-weight:700;">
-                    {status_label}
+                    <div style="color:{status_color}; font-weight:700;">
+                        {status_label}
+                    </div>
                 </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-            st.write("")
-                
+                # 🔽 ФАЙЛЫ К ЗАДАНИЮ
+                files_df = pd.read_sql(
+                    "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                    conn,
+                    params=(int(task["id"]),)
+                )
 
-    # =====================================================
-    # СОЗДАТЬ СОТРУДНИКА
-    # =====================================================
-    if menu == "Создать сотрудника":
-        st.markdown("<h1 class='title'>👥 Сотрудники</h1><div class='subtitle'>Создание аккаунта сотрудника</div>", unsafe_allow_html=True)
+                if not files_df.empty:
+                    for _, frow in files_df.iterrows():
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        full_name = st.text_input("Имя сотрудника (для отображения)")
-        username = st.text_input("Логин")
-        password = st.text_input("Пароль", type="password")
+                        c.execute(
+                            "SELECT content FROM task_files WHERE id=?",
+                            (int(frow["id"]),)
+                        )
+                        blob = c.fetchone()[0]
 
-        if st.button("Создать", use_container_width=True):
-            if not full_name or not username or not password:
-                st.warning("Заполни все поля")
-            else:
-                hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-                try:
-                    c.execute(
-                        "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
-                        (username, hashed, full_name, "employee"),
-                    )
-                    conn.commit()
-                    st.success("Сотрудник создан")
-                except:
-                    st.error("Логин уже существует")
-        st.markdown("</div>", unsafe_allow_html=True)
+                        st.download_button(
+                            label=f"⬇️ {frow['filename']}",
+                            data=blob,
+                            file_name=frow["filename"],
+                            mime=frow["mime_type"] or "application/octet-stream",
+                            key=f"dl_{task['id']}_{frow['id']}"
+                        )
+
+                st.write("")
 
     # =====================================================
     # СОЗДАТЬ ОТЧЕТ  (перенос долга тут работает)
