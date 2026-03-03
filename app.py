@@ -1256,6 +1256,24 @@ if user[4] == "employee":
 
                         st.caption(task["created_at"])
 
+                        # ===== DEADLINE COUNTDOWN =====
+                        if pd.notna(task["deadline"]):
+
+                            deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
+                            today = datetime.now().date()
+                            delta_days = (deadline_date.date() - today).days
+
+                            if task["status"] != "completed":
+
+                                if delta_days > 0:
+                                    st.caption(f"⏳ Осталось {delta_days} дн.")
+                                elif delta_days == 0:
+                                    st.caption("⚠️ Сегодня дедлайн")
+                                else:
+                                    st.caption(f"🔴 Просрочено на {abs(delta_days)} дн.")
+                            else:
+                                st.caption(f"📅 Дедлайн: {task['deadline']}")
+
                         # ===== Вложения =====
                         files_df = pd.read_sql(
                             "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
