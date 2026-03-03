@@ -1189,7 +1189,18 @@ if user[4] == "employee":
     # =====================================================
 
     if employee_menu == "Мои задания":
+        user_id = int(user[0])
 
+        tasks = pd.read_sql("""
+            SELECT *
+            FROM tasks
+            WHERE assigned_to=?
+            ORDER BY created_at DESC
+        """, conn, params=(user_id,))
+
+        if tasks.empty:
+            st.info("У вас пока нет заданий")
+            st.stop()    
         cols = st.columns(3)
 
         for i, (_, task) in enumerate(tasks.iterrows()):
