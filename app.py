@@ -299,11 +299,8 @@ button[kind="secondary"]:hover{
   cursor:not-allowed;
 }
 
-div.stButton > button {
-  opacity: 0;
-  height: 0px;
-  padding: 0;
-  margin: 0;
+.shop-hidden button {
+  display: none !important;
 }
 
 </style>
