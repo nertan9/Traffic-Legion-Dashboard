@@ -1189,7 +1189,8 @@ if user[4] == "employee":
 
                     st.caption(task["created_at"])
 
-                    # ===== Вложения =====
+                    # ===== Вложения (аккуратный вид) =====
+
                     files_df = pd.read_sql(
                         "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
                         conn,
@@ -1197,26 +1198,35 @@ if user[4] == "employee":
                     )
 
                     if not files_df.empty:
-                        st.markdown("📎 **Вложения:**")
 
-                        for _, frow in files_df.iterrows():
+                        file_count = len(files_df)
 
-                            c.execute(
-                                "SELECT content FROM task_files WHERE id=?",
-                                (int(frow["id"]),)
-                            )
-                            row = c.fetchone()
+                        with st.expander(f"📎 Вложения ({file_count})", expanded=False):
 
-                            if row:
-                                blob = row[0]
+                            for idx, (_, frow) in enumerate(files_df.iterrows(), start=1):
 
-                                st.download_button(
-                                    label="⬇ Скачать",
-                                    data=blob,
-                                    file_name=frow["filename"],
-                                    mime=frow["mime_type"] or "application/octet-stream",
-                                    key=f"emp_dl_{task['id']}_{frow['id']}"
+                                c.execute(
+                                    "SELECT content FROM task_files WHERE id=?",
+                                    (int(frow["id"]),)
                                 )
+                                row = c.fetchone()
+
+                                if row:
+                                    blob = row[0]
+
+                                    colA, colB = st.columns([4, 1])
+
+                                    with colA:
+                                        st.caption(f"{idx}. {frow['filename']}")
+
+                                    with colB:
+                                        st.download_button(
+                                            label="⬇ Скачать",
+                                            data=blob,
+                                            file_name=frow["filename"],
+                                            mime=frow["mime_type"] or "application/octet-stream",
+                                            key=f"emp_dl_{task['id']}_{frow['id']}"
+                                        )
 
                     # ===== Кнопка выполнить =====
                     if task["status"] != "completed":
