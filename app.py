@@ -1160,31 +1160,31 @@ if user[4] == "employee":
                 status_text = "Выполнено" if is_completed else "Открыто"
 
                 st.markdown(f"""
-            <div class="card" style="min-height:170px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-weight:700;">
-                        {task['title']}
-                    </div>
-                    <div style="
-                        font-size:11px;
-                        padding:4px 8px;
-                        border-radius:999px;
-                        background:{status_color}20;
-                        color:{status_color};
-                        font-weight:700;
-                    ">
-                        {status_text}
-                    </div>
-                </div>
+<div class="card" style="min-height:170px;">
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+  <div style="font-weight:700;">
+   {task['title']}
+  </div>
+ <div style="
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:{status_color}20;
+  color:{status_color};
+  font-weight:700;
+ ">
+ {status_text}
+ </div>
+</div>
 
-                <div class="small" style="margin-top:8px;">
-                    {task['description'] or ""}
-                </div>
+<div class="small" style="margin-top:8px;">
+ {task['description'] or ""}
+</div>
 
-                <div class="small" style="margin-top:8px;">
-                    {task['created_at']}
-                </div>
-            </div>
+<div class="small" style="margin-top:8px;">
+ {task['created_at']}
+</div>
+</div>
                 """, unsafe_allow_html=True)
 
                 # ===== ФАЙЛЫ =====
