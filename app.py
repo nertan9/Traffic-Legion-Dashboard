@@ -426,6 +426,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     assigned_to INTEGER,
     created_by INTEGER,
     status TEXT DEFAULT 'open',
+    deadline TEXT,
     created_at TEXT,
     completed_at TEXT
 )
@@ -445,6 +446,14 @@ CREATE TABLE IF NOT EXISTS task_files (
 """)
 
 
+
+conn.commit()
+
+# ===== DB MIGRATION: deadline column =====
+try:
+    c.execute("ALTER TABLE tasks ADD COLUMN deadline TEXT")
+except Exception:
+    pass
 
 conn.commit()
 
@@ -830,6 +839,7 @@ if user[4] == "admin":
 
             title = st.text_input("Название задания")
             description = st.text_area("Описание")
+            deadline = st.date_input("Дедлайн")
 
             emp_name = st.selectbox(
                 "Назначить сотруднику",
@@ -859,14 +869,15 @@ if user[4] == "admin":
                         # 1️⃣ Создаем задачу
                         c.execute("""
                             INSERT INTO tasks
-                            (title, description, assigned_to, created_by, created_at)
-                            VALUES (?, ?, ?, ?, ?)
+                            (title, description, assigned_to, created_by, created_at, deadline)
+                            VALUES (?, ?, ?, ?, ?, ?)
                         """, (
                             title,
                             description,
                             assigned_id,
                             user[0],
-                            created_at
+                            created_at,
+                            deadline.strftime("%Y-%m-%d")
                         ))
 
                         task_id = c.lastrowid  # ← получаем ID новой задачи
