@@ -1129,7 +1129,7 @@ if user[4] == "employee":
     ])
 
     # =====================================================
-    # ЗАДАНИЯ СОТРУДНИКА
+    # ЗАДАНИЯ СОТРУДНИКА (КОМПАКТНЫЕ КАРТОЧКИ)
     # =====================================================
 
     if employee_menu == "Мои задания":
@@ -1147,31 +1147,47 @@ if user[4] == "employee":
 
         if tasks.empty:
             st.info("У вас пока нет заданий")
-        else:
-            for _, task in tasks.iterrows():
+            st.stop()
+
+        cols = st.columns(3)  # ← 3 карточки в ряд
+
+        for i, (_, task) in enumerate(tasks.iterrows()):
+
+            with cols[i % 3]:
 
                 is_completed = task["status"] == "completed"
                 status_color = "#22C55E" if is_completed else "#F59E0B"
-                status_label = "Выполнено" if is_completed else "Открыто"
+                status_text = "Выполнено" if is_completed else "Открыто"
 
                 st.markdown(f"""
-        <div class="card">
-            <div style="display:flex; justify-content:space-between;">
-                <div>
-                    <div style="font-weight:700; font-size:16px;">
+            <div class="card" style="min-height:170px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-weight:700;">
                         {task['title']}
                     </div>
-                    <div class="small">{task['description']}</div>
-                    <div class="small">Создано: {task['created_at']}</div>
+                    <div style="
+                        font-size:11px;
+                        padding:4px 8px;
+                        border-radius:999px;
+                        background:{status_color}20;
+                        color:{status_color};
+                        font-weight:700;
+                    ">
+                        {status_text}
+                    </div>
                 </div>
-                <div style="color:{status_color}; font-weight:700;">
-                    {status_label}
+
+                <div class="small" style="margin-top:8px;">
+                    {task['description'] or ""}
+                </div>
+
+                <div class="small" style="margin-top:8px;">
+                    {task['created_at']}
                 </div>
             </div>
-        </div>
                 """, unsafe_allow_html=True)
 
-                # 🔽 ФАЙЛЫ К ЗАДАНИЮ
+                # ===== ФАЙЛЫ =====
                 files_df = pd.read_sql(
                     "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
                     conn,
@@ -1185,19 +1201,21 @@ if user[4] == "employee":
                             "SELECT content FROM task_files WHERE id=?",
                             (int(frow["id"]),)
                         )
-                        blob = c.fetchone()[0]
+                        row = c.fetchone()
+                        if row:
+                            blob = row[0]
 
-                        st.download_button(
-                            label=f"⬇️ {frow['filename']}",
-                            data=blob,
-                            file_name=frow["filename"],
-                            mime=frow["mime_type"] or "application/octet-stream",
-                            key=f"emp_dl_{task['id']}_{frow['id']}"
-                        )
+                            st.download_button(
+                                label=f"⬇ {frow['filename'][:18]}",
+                                data=blob,
+                                file_name=frow["filename"],
+                                mime=frow["mime_type"] or "application/octet-stream",
+                                key=f"emp_dl_{task['id']}_{frow['id']}"
+                            )
 
-                # 🔘 КНОПКА ВЫПОЛНЕНО
+                # ===== КНОПКА =====
                 if not is_completed:
-                    if st.button("✅ Отметить выполнено", key=f"complete_{task['id']}"):
+                    if st.button("✅ Выполнить", key=f"complete_{task['id']}"):
                         c.execute("""
                             UPDATE tasks
                             SET status='completed',
@@ -1208,10 +1226,7 @@ if user[4] == "employee":
                             int(task["id"])
                         ))
                         conn.commit()
-                        st.success("Задание отмечено выполненным")
                         st.rerun()
-
-                st.write("")
 
     if employee_menu == "Мои отчеты":
         st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
