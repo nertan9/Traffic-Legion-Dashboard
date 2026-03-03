@@ -1211,7 +1211,7 @@ if user[4] == "employee":
                                 blob = row[0]
 
                                 st.download_button(
-                                    label=f"{frow['filename']}",
+                                    label="⬇ Скачать",
                                     data=blob,
                                     file_name=frow["filename"],
                                     mime=frow["mime_type"] or "application/octet-stream",
