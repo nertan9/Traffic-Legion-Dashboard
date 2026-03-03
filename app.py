@@ -643,7 +643,7 @@ if user[4] == "admin":
                     st.success("Сотрудник создан")
 
                 except sqlite3.IntegrityError:
-                    t.error("Пользователь с таким логином уже существует")
+                    st.error("Пользователь с таким логином уже существует")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
