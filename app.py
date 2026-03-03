@@ -1029,10 +1029,38 @@ if user[4] == "admin":
                     st.caption(f"Дедлайн: {task['deadline']}")
 
             with col3:
-                if task["status"] == "completed":
-                    st.success("Выполнено")
-                else:
-                    st.warning("Открыто")
+                s_col, a_col = st.columns([1, 1])
+
+                # --- статус ---
+                with s_col:
+                    if task["status"] == "completed":
+                        st.success("Выполнено")
+                    else:
+                        st.warning("Открыто")
+
+                # --- быстрые действия ---
+                with a_col:
+                    t_id = int(task["id"])
+
+                    # кнопка переключения статуса
+                    if task["status"] == "completed":
+                        if st.button("↩", key=f"admin_reopen_{t_id}", help="Вернуть в открытые"):
+                            c.execute("UPDATE tasks SET status='open', completed_at=NULL WHERE id=?", (t_id,))
+                            conn.commit()
+                            st.rerun()
+                    else:
+                        if st.button("✅", key=f"admin_done_{t_id}", help="Отметить выполненным"):
+                            c.execute(
+                                "UPDATE tasks SET status='completed', completed_at=? WHERE id=?",
+                                (datetime.now().strftime("%Y-%m-%d %H:%M"), t_id)
+                            )
+                            conn.commit()
+                            st.rerun()
+
+        # кнопка удаления (запрашиваем подтверждение)
+        if st.button("🗑", key=f"admin_del_{t_id}", help="Удалить задание"):
+            st.session_state["confirm_delete_task_id"] = t_id
+            st.rerun()
 
             with st.expander("Детали"):
 
@@ -1076,8 +1104,32 @@ if user[4] == "admin":
                                 mime=frow["mime_type"] or "application/octet-stream",
                                 key=f"admin_dl_{task['id']}_{frow['id']}"
                             )
+            # --- подтверждение удаления (показывается только для выбранной задачи) ---
+            t_id = int(task["id"])
+            if st.session_state.get("confirm_delete_task_id") == t_id:
 
-            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+                st.warning("Удалить это задание? Это действие нельзя отменить.")
+
+                c1, c2 = st.columns(2)
+
+                with c1:
+                    if st.button("Да, удалить", key=f"confirm_yes_{t_id}", use_container_width=True):
+                        try:
+                            c.execute("DELETE FROM task_files WHERE task_id=?", (t_id,))
+                            c.execute("DELETE FROM tasks WHERE id=?", (t_id,))
+                            conn.commit()
+                            st.session_state["confirm_delete_task_id"] = None
+                            st.success("Задание удалено")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Ошибка удаления: {e}")
+
+                with c2:
+                    if st.button("Отмена", key=f"confirm_no_{t_id}", use_container_width=True):
+                        st.session_state["confirm_delete_task_id"] = None
+                        st.rerun()
+                        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
     # =====================================================
     # СОЗДАТЬ ОТЧЕТ  (перенос долга тут работает)
