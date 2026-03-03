@@ -1015,12 +1015,17 @@ if user[4] == "admin":
         # СПИСОК
         # =====================================================
 
+        if "confirm_delete_task_id" not in st.session_state:
+            st.session_state["confirm_delete_task_id"] = None
+
         for _, task in tasks.iterrows():
+
+            t_id = int(task["id"])
 
             col1, col2, col3 = st.columns([6, 3, 2])
 
             with col1:
-                st.markdown(f"**#{int(task['id'])} • {task['title']}**")
+                st.markdown(f"**#{t_id} • {task['title']}**")
                 st.caption(f"👤 {task['employee_name'] or '—'}")
 
             with col2:
@@ -1040,9 +1045,8 @@ if user[4] == "admin":
 
                 # --- быстрые действия ---
                 with a_col:
-                    t_id = int(task["id"])
 
-                    # кнопка переключения статуса
+                    # смена статуса
                     if task["status"] == "completed":
                         if st.button("↩", key=f"admin_reopen_{t_id}", help="Вернуть в открытые"):
                             c.execute("UPDATE tasks SET status='open', completed_at=NULL WHERE id=?", (t_id,))
@@ -1057,19 +1061,19 @@ if user[4] == "admin":
                             conn.commit()
                             st.rerun()
 
-        # кнопка удаления (запрашиваем подтверждение)
-        if st.button("🗑", key=f"admin_del_{t_id}", help="Удалить задание"):
-            st.session_state["confirm_delete_task_id"] = t_id
-            st.rerun()
+                    # открыть подтверждение удаления
+                    if st.button("🗑", key=f"admin_del_{t_id}", help="Удалить задание"):
+                        st.session_state["confirm_delete_task_id"] = t_id
+                        st.rerun()
 
-            with st.expander("Детали"):
+            # --- детали всегда у каждой строки ---
+            with st.expander("Детали", expanded=False):
 
                 desc_df = pd.read_sql(
                     "SELECT description FROM tasks WHERE id=?",
                     conn,
-                    params=(int(task["id"]),)
+                    params=(t_id,)
                 )
-
                 desc = desc_df["description"].iloc[0] if not desc_df.empty else ""
 
                 if desc:
@@ -1080,39 +1084,35 @@ if user[4] == "admin":
                 files_df = pd.read_sql(
                     "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
                     conn,
-                    params=(int(task["id"]),)
+                    params=(t_id,)
                 )
 
                 if files_df.empty:
                     st.caption("Вложений нет")
                 else:
                     for _, frow in files_df.iterrows():
-
-                        c.execute(
-                            "SELECT content FROM task_files WHERE id=?",
-                            (int(frow["id"]),)
-                        )
+                        c.execute("SELECT content FROM task_files WHERE id=?", (int(frow["id"]),))
                         row = c.fetchone()
+                        if not row:
+                            continue
 
-                        if row:
-                            blob = row[0]
+                        blob = row[0]
+                        st.download_button(
+                            label=f"⬇ Скачать ({frow['filename']})",
+                            data=blob,
+                            file_name=frow["filename"],
+                            mime=frow["mime_type"] or "application/octet-stream",
+                            key=f"admin_dl_{t_id}_{int(frow['id'])}"
+                        )
 
-                            st.download_button(
-                                label=f"⬇ Скачать ({frow['filename']})",
-                                data=blob,
-                                file_name=frow["filename"],
-                                mime=frow["mime_type"] or "application/octet-stream",
-                                key=f"admin_dl_{task['id']}_{frow['id']}"
-                            )
-            # --- подтверждение удаления (показывается только для выбранной задачи) ---
-            t_id = int(task["id"])
+            # --- подтверждение удаления: только для выбранной задачи ---
             if st.session_state.get("confirm_delete_task_id") == t_id:
 
                 st.warning("Удалить это задание? Это действие нельзя отменить.")
 
-                c1, c2 = st.columns(2)
+                d1, d2 = st.columns(2)
 
-                with c1:
+                with d1:
                     if st.button("Да, удалить", key=f"confirm_yes_{t_id}", use_container_width=True):
                         try:
                             c.execute("DELETE FROM task_files WHERE task_id=?", (t_id,))
@@ -1125,11 +1125,12 @@ if user[4] == "admin":
                             conn.rollback()
                             st.error(f"Ошибка удаления: {e}")
 
-                with c2:
+                with d2:
                     if st.button("Отмена", key=f"confirm_no_{t_id}", use_container_width=True):
                         st.session_state["confirm_delete_task_id"] = None
                         st.rerun()
-                        st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
     # =====================================================
     # СОЗДАТЬ ОТЧЕТ  (перенос долга тут работает)
