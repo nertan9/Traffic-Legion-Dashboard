@@ -814,7 +814,7 @@ if user[4] == "admin":
                         st.rerun()
                 
     # =====================================================
-    # ЗАДАНИЯ
+    # ЗАДАНИЯ (АДМИН)
     # =====================================================
     if menu == "Задания":
 
@@ -824,161 +824,260 @@ if user[4] == "admin":
             unsafe_allow_html=True
         )
 
-        # =========================
-        # СОЗДАНИЕ ЗАДАНИЯ
-        # =========================
+        # =====================================================
+        # СОЗДАНИЕ ЗАДАНИЯ (СВЕРНУТО)
+        # =====================================================
 
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        with st.expander("➕ Создать задание", expanded=False):
 
-        employees = pd.read_sql(
-            "SELECT id, full_name FROM users WHERE role='employee'",
-            conn
-        )
-
-        if employees.empty:
-            st.info("Нет сотрудников")
-        else:
-
-            title = st.text_input("Название задания")
-            description = st.text_area("Описание")
-            deadline = st.date_input("Дедлайн")
-
-            emp_name = st.selectbox(
-                "Назначить сотруднику",
-                employees["full_name"]
+            employees = pd.read_sql(
+                "SELECT id, full_name FROM users WHERE role='employee'",
+                conn
             )
 
-            assigned_id = int(
-                employees.loc[
-                    employees["full_name"] == emp_name, "id"
-                ].values[0]
-            )
+            if employees.empty:
+                st.info("Нет сотрудников")
+            else:
+                title = st.text_input("Название задания")
+                description = st.text_area("Описание")
+                deadline = st.date_input("Дедлайн")
 
-            uploaded_files = st.file_uploader(
-                "Файлы к заданию",
-                accept_multiple_files=True
-            )
+                emp_name = st.selectbox(
+                    "Назначить сотруднику",
+                    employees["full_name"]
+                )
 
-            if st.button("Создать задание", use_container_width=True):
+                assigned_id = int(
+                    employees.loc[
+                        employees["full_name"] == emp_name, "id"
+                    ].values[0]
+                )
 
-                if not title:
-                    st.warning("Введите название задания")
-                else:
+                uploaded_files = st.file_uploader(
+                    "Файлы к заданию",
+                    accept_multiple_files=True
+                )
 
-                    created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+                if st.button("Создать задание", use_container_width=True):
 
-                    try:
-                        # 1️⃣ Создаем задачу
-                        c.execute("""
-                            INSERT INTO tasks
-                            (title, description, assigned_to, created_by, created_at, deadline)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (
-                            title,
-                            description,
-                            assigned_id,
-                            user[0],
-                            created_at,
-                            deadline.strftime("%Y-%m-%d")
-                        ))
+                    if not title:
+                        st.warning("Введите название задания")
+                    else:
 
-                        task_id = c.lastrowid  # ← получаем ID новой задачи
+                        created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-                        # 2️⃣ Сохраняем файлы (если есть)
-                        if uploaded_files:
-                            for f in uploaded_files:
+                        try:
+                            c.execute("""
+                                INSERT INTO tasks
+                                (title, description, assigned_to, created_by, created_at, deadline)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (
+                                title,
+                                description,
+                                assigned_id,
+                                user[0],
+                                created_at,
+                                deadline.strftime("%Y-%m-%d")
+                            ))
 
-                                content = f.getvalue()
+                            task_id = c.lastrowid
 
-                                c.execute("""
-                                    INSERT INTO task_files
-                                    (task_id, filename, mime_type, size_bytes, content, uploaded_by, uploaded_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                                """, (
-                                    task_id,
-                                    f.name,
-                                    f.type,
-                                    len(content),
-                                    content,
-                                    user[0],
-                                    created_at
-                                ))
+                            if uploaded_files:
+                                for f in uploaded_files:
+                                    content = f.getvalue()
 
-                        conn.commit()
-                        st.success("Задание создано")
-                        st.rerun()
+                                    c.execute("""
+                                        INSERT INTO task_files
+                                        (task_id, filename, mime_type, size_bytes, content, uploaded_by, uploaded_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    """, (
+                                        task_id,
+                                        f.name,
+                                        f.type,
+                                        len(content),
+                                        content,
+                                        user[0],
+                                        created_at
+                                    ))
 
-                    except Exception as e:
-                        conn.rollback()
-                        st.error(f"Ошибка при создании задания: {e}")
+                            conn.commit()
+                            st.success("Задание создано")
+                            st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Ошибка: {e}")
 
         st.write("")
 
-        # =========================
-        # СПИСОК ЗАДАНИЙ
-        # =========================
+        # =====================================================
+        # ФИЛЬТРЫ
+        # =====================================================
 
-        tasks = pd.read_sql("""
-            SELECT t.*, u.full_name
+        st.markdown("### 📋 Все задания")
+
+        f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
+
+        with f1:
+            search = st.text_input("Поиск", placeholder="Название или описание...")
+
+        with f2:
+            employees = pd.read_sql(
+                "SELECT full_name FROM users WHERE role='employee'",
+                conn
+            )
+            emp_filter = st.selectbox(
+                "Сотрудник",
+                ["Все"] + employees["full_name"].tolist()
+            )
+
+        with f3:
+            status_filter = st.selectbox(
+                "Статус",
+                ["Все", "Открыто", "Выполнено"]
+            )
+
+        with f4:
+            page_size = st.selectbox("На стр.", [10, 20, 50], index=1)
+
+        # =====================================================
+        # SQL СБОРКА
+        # =====================================================
+
+        where = []
+        params = []
+
+        if search:
+            where.append("(t.title LIKE ? OR t.description LIKE ?)")
+            params += [f"%{search}%", f"%{search}%"]
+
+        if emp_filter != "Все":
+            where.append("u.full_name = ?")
+            params.append(emp_filter)
+
+        if status_filter != "Все":
+            where.append("t.status = ?")
+            params.append("completed" if status_filter == "Выполнено" else "open")
+
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+        count_df = pd.read_sql(f"""
+            SELECT COUNT(*) as cnt
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
+            {where_sql}
+        """, conn, params=params)
+
+        total = int(count_df["cnt"].iloc[0])
+
+        if total == 0:
+            st.info("Ничего не найдено")
+            st.stop()
+
+        # =====================================================
+        # ПАГИНАЦИЯ
+        # =====================================================
+
+        pages = max(1, (total + page_size - 1) // page_size)
+
+        if "admin_task_page" not in st.session_state:
+            st.session_state.admin_task_page = 1
+
+        p1, p2, p3 = st.columns([1, 2, 1])
+
+        with p1:
+            if st.button("⬅", disabled=st.session_state.admin_task_page <= 1):
+                st.session_state.admin_task_page -= 1
+                st.rerun()
+
+        with p2:
+            st.caption(f"Страница {st.session_state.admin_task_page} / {pages} • Всего: {total}")
+
+        with p3:
+            if st.button("➡", disabled=st.session_state.admin_task_page >= pages):
+                st.session_state.admin_task_page += 1
+                st.rerun()
+
+        offset = (st.session_state.admin_task_page - 1) * page_size
+
+        tasks = pd.read_sql(f"""
+            SELECT
+                t.id, t.title, t.status, t.created_at, t.deadline,
+                u.full_name as employee_name
+            FROM tasks t
+            LEFT JOIN users u ON t.assigned_to = u.id
+            {where_sql}
             ORDER BY t.created_at DESC
-        """, conn)
+            LIMIT ? OFFSET ?
+        """, conn, params=params + [page_size, offset])
 
-        if tasks.empty:
-            st.info("Пока нет заданий")
-        else:
+        # =====================================================
+        # СПИСОК
+        # =====================================================
 
-            for _, task in tasks.iterrows():
+        for _, task in tasks.iterrows():
 
-                status_color = "#22C55E" if task["status"] == "completed" else "#F59E0B"
-                status_label = "Выполнено" if task["status"] == "completed" else "Открыто"
+            col1, col2, col3 = st.columns([6, 3, 2])
 
-                st.markdown(f"""
-            <div class="card">
-                <div style="display:flex; justify-content:space-between;">
-                    <div>
-                        <div style="font-weight:700; font-size:16px;">
-                            {task['title']}
-                        </div>
-                        <div class="small">{task['description']}</div>
-                        <div class="small">Сотрудник: {task['full_name']}</div>
-                        <div class="small">Создано: {task['created_at']}</div>
-                    </div>
-                    <div style="color:{status_color}; font-weight:700;">
-                        {status_label}
-                    </div>
-                </div>
-            </div>
-                """, unsafe_allow_html=True)
+            with col1:
+                st.markdown(f"**#{int(task['id'])} • {task['title']}**")
+                st.caption(f"👤 {task['employee_name'] or '—'}")
 
-                # 🔽 ФАЙЛЫ К ЗАДАНИЮ
+            with col2:
+                st.caption(f"Создано: {task['created_at']}")
+                if pd.notna(task["deadline"]):
+                    st.caption(f"Дедлайн: {task['deadline']}")
+
+            with col3:
+                if task["status"] == "completed":
+                    st.success("Выполнено")
+                else:
+                    st.warning("Открыто")
+
+            with st.expander("Детали"):
+
+                desc_df = pd.read_sql(
+                    "SELECT description FROM tasks WHERE id=?",
+                    conn,
+                    params=(int(task["id"]),)
+                )
+
+                desc = desc_df["description"].iloc[0] if not desc_df.empty else ""
+
+                if desc:
+                    st.write(desc)
+                else:
+                    st.caption("Описание отсутствует")
+
                 files_df = pd.read_sql(
                     "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
                     conn,
                     params=(int(task["id"]),)
                 )
 
-                if not files_df.empty:
+                if files_df.empty:
+                    st.caption("Вложений нет")
+                else:
                     for _, frow in files_df.iterrows():
 
                         c.execute(
                             "SELECT content FROM task_files WHERE id=?",
                             (int(frow["id"]),)
                         )
-                        blob = c.fetchone()[0]
+                        row = c.fetchone()
 
-                        st.download_button(
-                            label=f"⬇️ {frow['filename']}",
-                            data=blob,
-                            file_name=frow["filename"],
-                            mime=frow["mime_type"] or "application/octet-stream",
-                            key=f"dl_{task['id']}_{frow['id']}"
-                        )
+                        if row:
+                            blob = row[0]
 
-                st.write("")
+                            st.download_button(
+                                label=f"⬇ Скачать ({frow['filename']})",
+                                data=blob,
+                                file_name=frow["filename"],
+                                mime=frow["mime_type"] or "application/octet-stream",
+                                key=f"admin_dl_{task['id']}_{frow['id']}"
+                            )
+
+            st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
     # =====================================================
     # СОЗДАТЬ ОТЧЕТ  (перенос долга тут работает)
