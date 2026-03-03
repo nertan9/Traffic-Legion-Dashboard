@@ -303,6 +303,23 @@ button[kind="secondary"]:hover{
   display: none !important;
 }
 
+/* ===== TASK ATTACHMENTS LOOK INSIDE CARD ===== */
+div[data-testid="stDownloadButton"]{
+  margin-top: -12px;   /* подтягиваем к карточке */
+  margin-bottom: 10px;
+}
+div[data-testid="stDownloadButton"] > button{
+  border-radius: 999px !important;
+  padding: 6px 12px !important;
+  border: 1px solid var(--border) !important;
+  background: rgba(255,255,255,.03) !important;
+  color: var(--text) !important;
+}
+div[data-testid="stDownloadButton"] > button:hover{
+  border-color: rgba(124,58,237,.55) !important;
+  background: rgba(124,58,237,.10) !important;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -1129,7 +1146,7 @@ if user[4] == "employee":
     ])
 
     # =====================================================
-    # ЗАДАНИЯ СОТРУДНИКА (КОМПАКТНЫЕ КАРТОЧКИ)
+    # ЗАДАНИЯ СОТРУДНИКА (КАРТОЧКИ С ВЛОЖЕНИЯМИ)
     # =====================================================
 
     if employee_menu == "Мои задания":
@@ -1149,7 +1166,7 @@ if user[4] == "employee":
             st.info("У вас пока нет заданий")
             st.stop()
 
-        cols = st.columns(3)  # ← 3 карточки в ряд
+        cols = st.columns(3)
 
         for i, (_, task) in enumerate(tasks.iterrows()):
 
@@ -1159,86 +1176,81 @@ if user[4] == "employee":
                 status_color = "#22C55E" if is_completed else "#F59E0B"
                 status_text = "Выполнено" if is_completed else "Открыто"
 
-                with st.container():
-                    st.markdown("<div class='card'>", unsafe_allow_html=True)
+                # ===== САМА КАРТОЧКА (ТОЛЬКО HTML) =====
+                st.markdown(f"""
+            <div class="card" style="min-height:190px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-weight:700;">
+                        {task['title']}
+                    </div>
+                    <div style="
+                        font-size:11px;
+                        padding:4px 8px;
+                        border-radius:999px;
+                        background:{status_color}20;
+                        color:{status_color};
+                        font-weight:700;
+                    ">
+                        {status_text}
+                    </div>
+                </div>
 
-                    # HEADER
-                    st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-weight:700;">
-                {task['title']}
-            </div>
-            <div style="
-                font-size:11px;
-                padding:4px 8px;
-                border-radius:999px;
-                background:{status_color}20;
-                color:{status_color};
-                font-weight:700;
-            ">
-                {status_text}
-            </div>
-        </div>
-                    """, unsafe_allow_html=True)
+                <div class="small" style="margin-top:8px;">
+                    {(task['description'] or '')}
+                </div>
 
-                    # DESCRIPTION
-                    if task["description"]:
-                        st.markdown(
-                            f"<div class='small' style='margin-top:8px;'>{task['description']}</div>",
-                            unsafe_allow_html=True
+                <div class="small" style="margin-top:8px;">
+                    {task['created_at']}
+                </div>
+
+                <div style="margin-top:10px;" class="small">
+                    📎 Вложения:
+                </div>
+            </div>
+                """, unsafe_allow_html=True)
+
+                # ===== ФАЙЛЫ (ВИЗУАЛЬНО ПОД КАРТОЧКОЙ) =====
+                files_df = pd.read_sql(
+                    "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                    conn,
+                    params=(int(task["id"]),)
+                )
+
+                if not files_df.empty:
+                    for _, frow in files_df.iterrows():
+
+                        c.execute(
+                            "SELECT content FROM task_files WHERE id=?",
+                            (int(frow["id"]),)
                         )
+                        row = c.fetchone()
 
-                    # DATE
-                    st.markdown(
-                        f"<div class='small' style='margin-top:8px;'>{task['created_at']}</div>",
-                        unsafe_allow_html=True
-                    )
+                        if row:
+                            blob = row[0]
 
-                    # ===== ФАЙЛЫ ВНУТРИ КАРТОЧКИ =====
-                    files_df = pd.read_sql(
-                        "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
-                        conn,
-                        params=(int(task["id"]),)
-                    )
-
-                    if not files_df.empty:
-                        st.markdown("<div style='margin-top:10px;'>", unsafe_allow_html=True)
-
-                        for _, frow in files_df.iterrows():
-                            c.execute(
-                                "SELECT content FROM task_files WHERE id=?",
-                                (int(frow["id"]),)
+                            st.download_button(
+                                label=f"📄 {frow['filename'][:22]}",
+                                data=blob,
+                                file_name=frow["filename"],
+                                mime=frow["mime_type"] or "application/octet-stream",
+                                key=f"emp_dl_{task['id']}_{frow['id']}"
                             )
-                            row = c.fetchone()
-                            if row:
-                                blob = row[0]
 
-                                st.download_button(
-                                    label=f"📎 {frow['filename'][:20]}",
-                                    data=blob,
-                                    file_name=frow["filename"],
-                                    mime=frow["mime_type"] or "application/octet-stream",
-                                    key=f"emp_dl_{task['id']}_{frow['id']}"
-                                )
+                # ===== КНОПКА ВЫПОЛНЕНИЯ =====
+                if not is_completed:
+                    if st.button("✅ Выполнить", key=f"complete_{task['id']}"):
+                        c.execute("""
+                            UPDATE tasks
+                            SET status='completed',
+                                completed_at=?
+                            WHERE id=?
+                        """, (
+                            datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            int(task["id"])
+                        ))
+                        conn.commit()
+                        st.rerun()
 
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-                    # ===== КНОПКА =====
-                    if not is_completed:
-                        if st.button("✅ Выполнить", key=f"complete_{task['id']}"):
-                            c.execute("""
-                                UPDATE tasks
-                                SET status='completed',
-                                    completed_at=?
-                                WHERE id=?
-                            """, (
-                                datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                int(task["id"])
-                            ))
-                            conn.commit()
-                            st.rerun()
-
-                    st.markdown("</div>", unsafe_allow_html=True)
 
     if employee_menu == "Мои отчеты":
         st.markdown("<h1 class='title'>📄 Мои отчеты</h1>", unsafe_allow_html=True)
