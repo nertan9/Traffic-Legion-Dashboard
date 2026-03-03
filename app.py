@@ -304,10 +304,7 @@ button[kind="secondary"]:hover{
 }
 
 /* ===== TASK ATTACHMENTS LOOK INSIDE CARD ===== */
-div[data-testid="stDownloadButton"]{
-  margin-top: -12px;   /* подтягиваем к карточке */
-  margin-bottom: 10px;
-}
+
 div[data-testid="stDownloadButton"] > button{
   border-radius: 999px !important;
   padding: 6px 12px !important;
@@ -357,6 +354,11 @@ div[data-testid="stDownloadButton"] > button:hover{
   padding: 4px 10px;
   border-radius: 999px;
   font-weight: 600;
+}
+
+.task-overdue {
+  border: 1px solid rgba(239,68,68,.6);
+  box-shadow: 0 0 0 1px rgba(239,68,68,.3);
 }
 
 </style>
@@ -1242,126 +1244,125 @@ if user[4] == "employee":
 
                 with cols[i % 3]:
 
-                    with st.container(border=True):
+                    # ===== ВЫЧИСЛЯЕМ ПРОСРОЧКУ =====
+                    is_overdue = False
+                    delta_days = None
 
-                        colA, colB = st.columns([4, 2])
+                    if pd.notna(task["deadline"]) and task["status"] != "completed":
+                        deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
+                        today = datetime.now().date()
+                        delta_days = (deadline_date.date() - today).days
 
-                        with colA:
-                            st.markdown(f"**{task['title']}**")
+                        if delta_days < 0:
+                            is_overdue = True
 
-                        with colB:
+                    card_class = "task-card task-overdue" if is_overdue else "task-card"
 
-                            if task["status"] == "completed":
-                                st.markdown("""
-        <div class="badge badgePaid">Выполнено</div>
-                                """, unsafe_allow_html=True)
-                            else:
+                    # ===== ОТКРЫВАЕМ КАРТОЧКУ =====
+                    st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
 
-                                # ===== DEADLINE BADGE =====
-                                deadline_badge = ""
+                    # ===== HEADER =====
+                    colA, colB = st.columns([4, 2])
 
-                                if pd.notna(task["deadline"]):
+                    with colA:
+                        st.markdown(f"<div class='task-title'>{task['title']}</div>", unsafe_allow_html=True)
 
-                                    deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
-                                    today = datetime.now().date()
-                                    delta_days = (deadline_date.date() - today).days
+                    with colB:
 
-                                    if delta_days > 0:
-                                        deadline_badge = f"⏳ {delta_days} дн."
-                                        badge_class = "badgeOpen"
+                        if task["status"] == "completed":
+                            badge_html = '<div class="badge badgePaid">Выполнено</div>'
 
-                                    elif delta_days == 0:
-                                        deadline_badge = "⚠️ Сегодня"
-                                        badge_class = "badgeOpen"
+                        else:
 
-                                    else:
-                                        deadline_badge = f"🔴 {abs(delta_days)} дн."
-                                        badge_class = "badgePaid"
-
-                                else:
-                                    deadline_badge = "Без срока"
-                                    badge_class = "badgePaid"
-
-                                st.markdown(
-                                    f"""
-            <div class="badge {badge_class}">
-                Открыто • {deadline_badge}
-            </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-
-                        if task["description"]:
-                            st.caption(task["description"])
-
-                        st.caption(task["created_at"])
-
-                        # ===== DEADLINE COUNTDOWN =====
-                        if pd.notna(task["deadline"]):
-
-                            deadline_date = datetime.strptime(task["deadline"], "%Y-%m-%d")
-                            today = datetime.now().date()
-                            delta_days = (deadline_date.date() - today).days
-
-                            if task["status"] != "completed":
+                            if pd.notna(task["deadline"]):
 
                                 if delta_days > 0:
-                                    st.caption(f"⏳ Осталось {delta_days} дн.")
+                                    badge_html = f"""
+                            <div class="badge badgeOpen">
+                                Открыто • ⏳ {delta_days} дн.
+                            </div>
+                                    """
+
                                 elif delta_days == 0:
-                                    st.caption("⚠️ Сегодня дедлайн")
+                                    badge_html = """
+                            <div class="badge badgeOpen">
+                                Открыто • ⚠️ Сегодня
+                            </div>
+                                    """
+
                                 else:
-                                    st.caption(f"🔴 Просрочено на {abs(delta_days)} дн.")
+                                    badge_html = f"""
+                            <div class="badge" style="
+                                color:#FCA5A5;
+                                border-color: rgba(239,68,68,.6);
+                                background: rgba(239,68,68,.12);
+                            ">
+                                🔴 Просрочено • {abs(delta_days)} дн.
+                            </div>
+                                    """
                             else:
-                                st.caption(f"📅 Дедлайн: {task['deadline']}")
+                                badge_html = '<div class="badge badgePaid">Открыто</div>'
 
-                        # ===== Вложения =====
-                        files_df = pd.read_sql(
-                            "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
-                            conn,
-                            params=(int(task["id"]),)
-                        )
+                        st.markdown(badge_html, unsafe_allow_html=True)
 
-                        if not files_df.empty:
-                            with st.expander(f"📎 Вложения ({len(files_df)})"):
+                    # ===== ОПИСАНИЕ =====
+                    if task["description"]:
+                        st.markdown(f"<div class='task-desc'>{task['description']}</div>", unsafe_allow_html=True)
 
-                                for _, frow in files_df.iterrows():
+                    # ===== ДАТА СОЗДАНИЯ =====
+                    st.markdown(f"<div class='task-date'>Создано: {task['created_at']}</div>", unsafe_allow_html=True)
 
-                                    c.execute(
-                                        "SELECT content FROM task_files WHERE id=?",
-                                        (int(frow["id"]),)
-                                    )
-                                    row = c.fetchone()
+                    # ===== ВЛОЖЕНИЯ =====
+                    files_df = pd.read_sql(
+                        "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                        conn,
+                        params=(int(task["id"]),)
+                    )
 
-                                    if row:
-                                        blob = row[0]
+                    if not files_df.empty:
+                        with st.expander(f"📎 Вложения ({len(files_df)})"):
 
-                                        col1, col2 = st.columns([4,1])
+                            for _, frow in files_df.iterrows():
 
-                                        with col1:
-                                            st.markdown(f"📄 {frow['filename']}")
+                                c.execute(
+                                    "SELECT content FROM task_files WHERE id=?",
+                                    (int(frow["id"]),)
+                                )
+                                row = c.fetchone()
 
-                                        with col2:
-                                            st.download_button(
-                                                label="⬇",
-                                                data=blob,
-                                                file_name=frow["filename"],
-                                                mime=frow["mime_type"] or "application/octet-stream",
-                                                key=f"emp_open_dl_{task['id']}_{frow['id']}"
-                                            )
+                                if row:
+                                    blob = row[0]
 
-                        # ===== Кнопка завершить =====
-                        if st.button("✅ Завершить", key=f"complete_{task['id']}"):
-                            c.execute("""
-                                UPDATE tasks
-                                SET status='completed',
-                                    completed_at=?
-                                WHERE id=?
-                            """, (
-                                datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                int(task["id"])
-                            ))
-                            conn.commit()
-                            st.rerun()
+                                    col1, col2 = st.columns([4,1])
+
+                                    with col1:
+                                        st.markdown(f"📄 {frow['filename']}")
+
+                                    with col2:
+                                        st.download_button(
+                                            label="⬇",
+                                            data=blob,
+                                            file_name=frow["filename"],
+                                            mime=frow["mime_type"] or "application/octet-stream",
+                                            key=f"emp_open_dl_{task['id']}_{frow['id']}"
+                                        )
+
+                    # ===== КНОПКА =====
+                    if st.button("✅ Завершить", key=f"complete_{task['id']}"):
+                        c.execute("""
+                            UPDATE tasks
+                            SET status='completed',
+                                completed_at=?
+                            WHERE id=?
+                        """, (
+                            datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            int(task["id"])
+                        ))
+                        conn.commit()
+                        st.rerun()
+
+                    # ===== ЗАКРЫВАЕМ КАРТОЧКУ =====
+                    st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
