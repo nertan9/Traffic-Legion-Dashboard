@@ -365,6 +365,19 @@ CREATE TABLE IF NOT EXISTS reward_orders (
 )
 """)
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    assigned_to INTEGER,
+    created_by INTEGER,
+    status TEXT DEFAULT 'open',
+    created_at TEXT,
+    completed_at TEXT
+)
+""")
+
 
 conn.commit()
 
@@ -576,7 +589,8 @@ if user[4] == "admin":
     "Создать сотрудника",
     "Создать отчет",
     "Все отчеты",
-    "Магазин"
+    "Магазин",
+    "Задания"
     ])
 
     # =====================================================
@@ -647,7 +661,97 @@ if user[4] == "admin":
                         st.success("Запрос отправлен")
                         st.rerun()
                 
+    # =====================================================
+    # ЗАДАНИЯ
+    # =====================================================
+    if menu == "Задания":
 
+        st.markdown(
+            "<h1 class='title'>📝 Задания</h1>"
+            "<div class='subtitle'>Постановка и контроль задач</div>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+        # ===== СОЗДАНИЕ ЗАДАНИЯ =====
+        employees = pd.read_sql(
+            "SELECT id, full_name FROM users WHERE role='employee'",
+            conn
+        )
+
+        if not employees.empty:
+
+            title = st.text_input("Название задания")
+            description = st.text_area("Описание")
+
+            emp_name = st.selectbox("Назначить сотруднику", employees["full_name"])
+            assigned_id = int(
+                employees.loc[employees["full_name"] == emp_name, "id"].values[0]
+            )
+
+            if st.button("Создать задание", use_container_width=True):
+                if not title:
+                    st.warning("Введите название")
+                else:
+                    c.execute("""
+                        INSERT INTO tasks
+                        (title, description, assigned_to, created_by, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        title,
+                        description,
+                        assigned_id,
+                        user[0],
+                        datetime.now().strftime("%Y-%m-%d %H:%M")
+                    ))
+                    conn.commit()
+                    st.success("Задание создано")
+                    st.rerun()
+
+        else:
+            st.info("Нет сотрудников")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.write("")
+
+        # ===== СПИСОК ЗАДАНИЙ =====
+        tasks = pd.read_sql("""
+            SELECT t.*, u.full_name
+            FROM tasks t
+            LEFT JOIN users u ON t.assigned_to = u.id
+            ORDER BY t.created_at DESC
+        """, conn)
+
+        if tasks.empty:
+            st.info("Пока нет заданий")
+            st.stop()
+
+        for _, task in tasks.iterrows():
+
+            status_color = "#22C55E" if task["status"] == "completed" else "#F59E0B"
+            status_label = "Выполнено" if task["status"] == "completed" else "Открыто"
+
+            st.markdown(f"""
+        <div class="card">
+            <div style="display:flex; justify-content:space-between;">
+                <div>
+                    <div style="font-weight:700; font-size:16px;">
+                        {task['title']}
+                    </div>
+                    <div class="small">{task['description']}</div>
+                    <div class="small">Сотрудник: {task['full_name']}</div>
+                    <div class="small">Создано: {task['created_at']}</div>
+                </div>
+                <div style="color:{status_color}; font-weight:700;">
+                    {status_label}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+            st.write("")
                 
 
     # =====================================================
