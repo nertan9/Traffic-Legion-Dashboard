@@ -320,6 +320,45 @@ div[data-testid="stDownloadButton"] > button:hover{
   background: rgba(124,58,237,.10) !important;
 }
 
+/* ===== TASK CARD PRO STYLE ===== */
+
+.task-card {
+  padding: 18px 18px 14px 18px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+  border: 1px solid rgba(255,255,255,.06);
+  transition: all .2s ease;
+}
+
+.task-card:hover {
+  border-color: rgba(124,58,237,.45);
+  transform: translateY(-2px);
+}
+
+.task-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.task-desc {
+  font-size: 13px;
+  opacity: .75;
+  margin-bottom: 10px;
+}
+
+.task-date {
+  font-size: 12px;
+  opacity: .5;
+}
+
+.task-badge {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -1151,97 +1190,87 @@ if user[4] == "employee":
 
     if employee_menu == "Мои задания":
 
-        st.markdown("## 📝 Мои задания")
-
-        user_id = int(user[0])
-
-        tasks = pd.read_sql("""
-            SELECT *
-            FROM tasks
-            WHERE assigned_to=?
-            ORDER BY created_at DESC
-        """, conn, params=(user_id,))
-
-        if tasks.empty:
-            st.info("У вас пока нет заданий")
-            st.stop()
-
         cols = st.columns(3)
 
         for i, (_, task) in enumerate(tasks.iterrows()):
 
             with cols[i % 3]:
 
-                with st.container(border=True):
+                is_completed = task["status"] == "completed"
+                status_color = "#22C55E" if is_completed else "#F59E0B"
+                status_bg = "#22C55E20" if is_completed else "#F59E0B20"
+                status_text = "Выполнено" if is_completed else "Открыто"
 
-                    colA, colB = st.columns([4, 1])
+                # ===== КАРТОЧКА =====
+                st.markdown(f"""
+        <div class="task-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="task-title">{task['title']}</div>
+                <div class="task-badge"
+                     style="background:{status_bg}; color:{status_color};">
+                    {status_text}
+                </div>
+            </div>
 
-                    with colA:
-                        st.markdown(f"**{task['title']}**")
-                    with colB:
-                        if task["status"] == "completed":
-                            st.success("Выполнено")
-                        else:
-                            st.warning("Открыто")
+            <div class="task-desc">
+                {(task['description'] or '')}
+            </div>
 
-                    if task["description"]:
-                        st.caption(task["description"])
+            <div class="task-date">
+                {task['created_at']}
+            </div>
+        </div>
+                """, unsafe_allow_html=True)
 
-                    st.caption(task["created_at"])
+                # ===== Вложения =====
+                files_df = pd.read_sql(
+                    "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
+                    conn,
+                    params=(int(task["id"]),)
+                )
 
-                    # ===== Вложения (аккуратный вид) =====
+                if not files_df.empty:
+                    with st.expander(f"📎 Вложения ({len(files_df)})"):
 
-                    files_df = pd.read_sql(
-                        "SELECT id, filename, mime_type FROM task_files WHERE task_id=?",
-                        conn,
-                        params=(int(task["id"]),)
-                    )
+                        for idx, (_, frow) in enumerate(files_df.iterrows(), start=1):
 
-                    if not files_df.empty:
+                            c.execute(
+                                "SELECT content FROM task_files WHERE id=?",
+                                (int(frow["id"]),)
+                            )
+                            row = c.fetchone()
 
-                        file_count = len(files_df)
+                            if row:
+                                blob = row[0]
 
-                        with st.expander(f"📎 Вложения ({file_count})", expanded=False):
+                                colA, colB = st.columns([4, 1])
 
-                            for idx, (_, frow) in enumerate(files_df.iterrows(), start=1):
+                                with colA:
+                                    st.caption(frow["filename"])
 
-                                c.execute(
-                                    "SELECT content FROM task_files WHERE id=?",
-                                    (int(frow["id"]),)
-                                )
-                                row = c.fetchone()
+                                with colB:
+                                    st.download_button(
+                                        label="⬇",
+                                        data=blob,
+                                        file_name=frow["filename"],
+                                        mime=frow["mime_type"] or "application/octet-stream",
+                                        key=f"emp_dl_{task['id']}_{frow['id']}"
+                                    )
 
-                                if row:
-                                    blob = row[0]
-
-                                    colA, colB = st.columns([4, 1])
-
-                                    with colA:
-                                        st.caption(f"{idx}. {frow['filename']}")
-
-                                    with colB:
-                                        st.download_button(
-                                            label="⬇ Скачать",
-                                            data=blob,
-                                            file_name=frow["filename"],
-                                            mime=frow["mime_type"] or "application/octet-stream",
-                                            key=f"emp_dl_{task['id']}_{frow['id']}"
-                                        )
-
-                    # ===== Кнопка выполнить =====
-                    if task["status"] != "completed":
-                        if st.button("✅ Выполнить", key=f"complete_{task['id']}"):
-                            c.execute("""
-                                UPDATE tasks
-                                SET status='completed',
-                                    completed_at=?
-                                WHERE id=?
-                            """, (
-                                datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                int(task["id"])
-                            ))
-                            conn.commit()
-                            st.rerun()
+                # ===== Кнопка =====
+                if not is_completed:
+                    if st.button("✅ Завершить", key=f"complete_{task['id']}"):
+                        c.execute("""
+                            UPDATE tasks
+                            SET status='completed',
+                                completed_at=?
+                            WHERE id=?
+                        """, (
+                            datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            int(task["id"])
+                        ))
+                        conn.commit()
+                        st.rerun()
 
 
     if employee_menu == "Мои отчеты":
