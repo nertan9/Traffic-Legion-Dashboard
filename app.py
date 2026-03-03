@@ -1189,6 +1189,10 @@ if user[4] == "employee":
     # =====================================================
 
     if employee_menu == "Мои задания":
+        st.markdown("<h1 class='title'>📝 Мои задания</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='subtitle'>Ваши текущие задачи</div>", unsafe_allow_html=True)
+        st.write("")
+
         user_id = int(user[0])
 
         tasks = pd.read_sql("""
@@ -1200,7 +1204,10 @@ if user[4] == "employee":
 
         if tasks.empty:
             st.info("У вас пока нет заданий")
-            st.stop()    
+            st.stop()
+
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            
         cols = st.columns(3)
 
         for i, (_, task) in enumerate(tasks.iterrows()):
