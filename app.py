@@ -1214,23 +1214,23 @@ if user[4] == "employee":
 
                 # ===== КАРТОЧКА =====
                 st.markdown(f"""
-        <div class="task-card">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div class="task-title">{task['title']}</div>
-                <div class="task-badge"
-                     style="background:{status_bg}; color:{status_color};">
-                    {status_text}
-                </div>
-            </div>
+<div class="task-card">
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+  <div class="task-title">{task['title']}</div>
+  <div class="task-badge"
+  style="background:{status_bg}; color:{status_color};">
+   {status_text}
+  </div>
+ </div>
 
-            <div class="task-desc">
-                {(task['description'] or '')}
-            </div>
+ <div class="task-desc">
+  {(task['description'] or '')}
+ </div>
 
-            <div class="task-date">
-                {task['created_at']}
-            </div>
-        </div>
+ <div class="task-date">
+  {task['created_at']}
+ </div>
+</div>
                 """, unsafe_allow_html=True)
 
                 # ===== Вложения =====
