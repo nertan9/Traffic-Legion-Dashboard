@@ -1204,7 +1204,7 @@ if user[4] == "employee":
             SELECT *
             FROM tasks
             WHERE assigned_to=?
-            RDER BY created_at DESC
+            ORDER BY created_at DESC
         """, conn, params=(user_id,))
 
         if tasks.empty:
