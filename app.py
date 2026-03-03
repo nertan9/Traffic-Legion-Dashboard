@@ -742,7 +742,7 @@ if user[4] == "admin":
                         task_id = c.lastrowid  # ← получаем ID новой задачи
 
                         # 2️⃣ Сохраняем файлы (если есть)
-                    i    f uploaded_files:
+                        if uploaded_files:
                             for f in uploaded_files:
 
                                 content = f.getvalue()
